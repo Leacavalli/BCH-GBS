@@ -373,6 +373,7 @@ Surf_prot_Infant_df
 ##  distribution of ALP family proteins per CC
 ```{r}
 Surf_prot_per_CC_df <- data_clean |>
+    filter(days_at_dx <= 365) |> 
   group_by(CC)|> 
   mutate(Surface_protein.ALP_FAM = Surface_protein.ALPHA + Surface_protein.ALP1 + Surface_protein.ALP23 + Surface_protein.RIB,
          Surface_protein.PILUS_island = rowSums(across(contains("PI"))), 
@@ -447,6 +448,7 @@ Surf_prot_per_Age_cat_df <- data_clean |>
   select(-N)
 Surf_prot_per_Age_cat_df_t <- cbind(as.data.frame(t(Surf_prot_per_Age_cat_df)), as.data.frame(t(Surf_prot_Infant_df)), as.data.frame(t(Surf_prot_df)))
 colnames(Surf_prot_per_Age_cat_df_t) <- Surf_prot_per_Age_cat_df_t[1,]
+colnames(Surf_prot_per_Age_cat_df_t)[length(colnames(Surf_prot_per_Age_cat_df_t))-1] <- "Total Infants (N=70)"
 colnames(Surf_prot_per_Age_cat_df_t)[length(colnames(Surf_prot_per_Age_cat_df_t))] <- "Total (N=87)"
 Surf_prot_per_Age_cat_df_t <- Surf_prot_per_Age_cat_df_t[-1, ]
 Surf_prot_per_Age_cat_df_t
