@@ -1,10 +1,7 @@
 
-# Rename Raw Reads
-for i in 0.RAW_READS/*_R2*
-do
- base=$(echo $i | cut -d '/' -f2-2 | cut -d '_' -f1-1)
- mv $i 0.RAW_READS/S$base\_2.fastq.gz
-done
+
+* Make sure that your raw reads are in 0.RAW_READS/ and called S*_{1,2}.fastq.gz
+* Make sure that the Outgroup for the phylogeny is in 0.RAW_READS/ and called Outgroup_{1,2}.fastq.gz
 
 # 1. Run Trimmomatic
 ### 1.1. Install Software and dependencies
@@ -34,18 +31,28 @@ done
 cd ../
 ```
 
-# 2. Run Kraken on trimmed reads
+# X. (OPTIONAL) Run Kraken on trimmed reads
+# This is optional because FastANI is later ran on assemmblies
 ### 2.1. Run
 ```
 mkdir 2.KRAKEN
 cd 2.KRAKEN
 for i in ../1.TRIMMED_READS/*trimmed*.fq.gz
 do
-  base=$(echo $i | cut -d '/' -f3-3 | cut -d '_' -f1-3)
-  sbatch -p test -t 0-00:10 --mem=100000 --wrap="kraken2 --db /n/holylfs05/LABS/hanage_lab/Lab/holyscratch01/lcavalli/Software/kraken2/standard_db --report $base\_report.txt --paired ../1.TRIMMED_READS/$base\_trimmed_1.fq.gz ../1.TRIMMED_READS/$base\_trimmed_2.fq.gz > $base\_kraken.out" ;
+  base=$(echo $i | cut -d '/' -f3-3 | cut -d '_' -f1-1)
+  sbatch -p shared -t 0-00:10 --mem=100000 --wrap="kraken2 --db /n/holylfs05/LABS/hanage_lab/Lab/holyscratch01/lcavalli/Software/kraken2/standard_db --report $base\_report.txt --paired ../1.TRIMMED_READS/$base\_trimmed_1.fq.gz ../1.TRIMMED_READS/$base\_trimmed_2.fq.gz > $base\_kraken.out" ;
 done
 ```
-
+### 2.2. Summarise
+```
+echo -e "Sample\tPercent GBS Reads" > KRAKEN_contaminated.txt
+for i in ../1.TRIMMED_READS/*trimmed*.fq.gz
+do
+  base=$(echo $i | cut -d '/' -f3-3 | cut -d '_' -f1-1)
+  percent=$(grep 'Streptococcus agalactiae' $base\_report.txt | head -1 | awk '{print $1}')
+  echo -e $base'\t'$percent
+done  >> KRAKEN_contaminated.txt
+```
 # 2. Run FASTQC on trimmed reads
 ### 2.1. Install Software and dependencies
 ```
@@ -317,8 +324,8 @@ source activate abricate
 ### 10.2. Summarise results
 ```
 cd 8.ABRICATE
-sbatch -p shared -c 1 -t 0-00:10 --mem=10000 --wrap="abricate --summary $base\_vfdb.tab > Summary_vfdb.tab"
-sbatch -p shared -c 1 -t 0-00:10 --mem=10000 --wrap="abricate --summary $base\_sip_gene.tab > Summary_sip_gene.tab"
+sbatch -p shared -c 1 -t 0-00:10 --mem=10000 --wrap="abricate --summary *_vfdb.tab > Summary_vfdb.tab"
+sbatch -p shared -c 1 -t 0-00:10 --mem=10000 --wrap="abricate --summary *_sip_gene.tab > Summary_sip_gene.tab"
 ```
 
 # 11. SNIPPY_MULTI
@@ -333,7 +340,7 @@ source activate snippy
 ```
 mkdir 10.SNIPPY_MULTI
 cd 10.SNIPPY_MULTI
-sbatch -p shared -c 1 -t 0-00:10 --mem=10000 --wrap="snippy-core --ref ../Files/AP018935.1.fa --prefix core_outgroup ../4.SNIPPY/*"
+sbatch -p shared -c 1 -t 0-00:10 --mem=10000 --wrap="snippy-core --ref ../Files/AP018935.1.fa --prefix core_outgroup ../4.SNIPPY/S* ../4.SNIPPY/Outgroup"
 sbatch -p shared -c 1 -t 0-00:10 --mem=10000 --wrap="snippy-clean_full_aln core_outgroup.full.aln > clean_outgroup.full.aln"
 ```
 
@@ -365,25 +372,8 @@ sbatch -p test -c 50 -t 0-12:00 --mem=100000 --wrap="/n/holyscratch01/hanage_lab
 
 
 #  MASHTREE
-cd /n/holylfs05/LABS/hanage_lab/Lab/holyscratch01/lcavalli/GBS_Madikay_Lea_2022/REPEAT_EVERYTHING/Global_EOD_LOD_isolates/ASSEMBLIES
+```
 module load python
 source activate mashtree
-sbatch -p shared -t 0-01:00 --mem=10000 --wrap="mashtree *.fasta* > tree3.dnd"
-
-
-
-  # X. Run KRAKEN
-  # Run Kraken
-  for i in 4.SNIPPY/Filter_out_QC/*
-  do
-    base=$(echo $i | cut -d '/' -f3-3| cut -d '_' -f1-1)
-  sbatch -p test -t 0-01:00 --mem=250000 --wrap="kraken2 --db /n/holylfs05/LABS/hanage_lab/Lab/holyscratch01/lcavalli/Software/kraken2/standard_db --report /n/holyscratch01/hanage_lab/lcavalli/BCH_GBS/NEXTFLOW_PIPELINE/13.KRAKEN/$base\_report.txt --paired /n/holyscratch01/hanage_lab/lcavalli/BCH_GBS/NEXTFLOW_PIPELINE/1.TRIMMED_READS/$base\_trimmed_1.fq.gz /n/holyscratch01/hanage_lab/lcavalli/BCH_GBS/NEXTFLOW_PIPELINE/1.TRIMMED_READS/$base\_trimmed_2.fq.gz > /n/holyscratch01/hanage_lab/lcavalli/BCH_GBS/NEXTFLOW_PIPELINE/13.KRAKEN/$base\_kraken.out" ;
-  done
-  # extract the percent from each kraken output file
-  echo -e "Sample\tPercent GBS Reads" > KRAKEN_contaminated.txt
-  for i in 4.SNIPPY/Filter_out_QC/*
-  do
-    base=$(echo $i | cut -d '/' -f3-3| cut -d '_' -f1-1)
-    percent=$(grep 'Streptococcus agalactiae' /n/holyscratch01/hanage_lab/lcavalli/BCH_GBS/NEXTFLOW_PIPELINE/13.KRAKEN/$base\_report.txt | head -1 | awk '{print $1}')
-    echo -e $base'\t'$percent
-done  >> KRAKEN_contaminated.txt
+sbatch -p shared -t 0-01:00 --mem=10000 --wrap="mashtree *.fastq* > tree3.dnd"
+```

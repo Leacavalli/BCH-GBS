@@ -1,0 +1,5 @@
+Sample	Percent GBS Reads
+S1	3.06
+S32	2.16
+S35	13.42
+S81	0.00
