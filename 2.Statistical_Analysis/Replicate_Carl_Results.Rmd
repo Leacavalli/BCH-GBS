@@ -4,21 +4,24 @@ output: html_document
 date: "2024-10-16"
 ---
 ```{r}
-# load libraries
-library(xlsx)
-library(tidyverse)
-library(khroma)
-library(colorBlindness)
-library(ggplot2)
-
-# load data
+# load Carl's data
 setwd("~/")
 data_Carl <- read.csv("1.1_Mastersheet_BCH.csv") |> 
   filter(!is.na(ID)) |>
   mutate(infant= ifelse(days_at_dx <=365, 1, 0))|>
-  mutate(infant= factor(infant, levels=c(1,0)))|>
   mutate(Meningitis= ifelse(isolated_from == "blood", 0, 1))
-  
+
+
+# load my data
+
+# load data
+setwd("~/GitHub/BCH-GBS/2.Statistical_Analysis")
+data <- read.xlsx("Clinical_Genomic_data.xlsx", sheetIndex = 1) 
+# Remove contaminated samples
+data_clean <- data|>
+  filter(! ID %in% c("1_S1","32_S32","35_S35","81_S81"))|> 
+  mutate(ICU = ifelse(Admission_loc=="ICU", 1,0))
+
 ```
 
 # Invasive GBS surveillance

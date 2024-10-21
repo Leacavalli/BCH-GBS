@@ -36,16 +36,23 @@ table(data_clean$isolated_from)
 table(data_clean$Age_cat)
 table(data_clean$infant)
 
-# distribution of Serotypes
-table(data_clean$Serotype)
-data_clean |> 
-        filter(infant ==1) |> 
-        group_by(Serotype)|> 
-        summarise(N_p= n())|> 
-        mutate(N_p= paste0(N_p, " (",round(100*(N_p/sum(N_p)),1), "%)"))
 ```
 # Figure 1 - Table 
 ```{r}
+# distribution of Serotypes Overall
+Sero_df <- data_clean |> 
+        group_by(Serotype)|> 
+        summarise(N_p= n())|> 
+        mutate("Total"= paste0(N_p, " (",round(100*(N_p/sum(N_p)),1), "%)"))|>
+  select(-N_p)
+# distribution of Serotypes in infants
+Sero_df_infant <- data_clean |> 
+        filter(infant ==1) |> 
+        group_by(Serotype)|> 
+        summarise(N_p= n())|> 
+        mutate("Total Infants"= paste0(N_p, " (",round(100*(N_p/sum(N_p)),1), "%)"))|>
+  select(-N_p)
+
 # Age distribution of Serotypes
 Age_Sero_df <- data_clean |>
   mutate(Age_cat = factor(Age_cat, levels = c("EOD", "LOD", "VLOD","Older Children (1-18 years)", "Adults"))) |>
@@ -55,6 +62,23 @@ Age_Sero_df <- data_clean |>
   select(Serotype, "EOD", "LOD", "VLOD","Older Children (1-18 years)", "Adults")|>
   replace_na(list("EOD" = 0, "LOD" = 0, "VLOD" = 0, "Older Children (1-18 years)" = 0, "Adults" = 0))|>
   mutate(across(c("EOD", "LOD", "VLOD","Older Children (1-18 years)", "Adults"), ~ paste(., " (", round(. / sum(.) * 100), "%)", sep="")))
+  
+# Join everything
+Age_Sero_df_FINAL <- left_join(left_join(Age_Sero_df, Sero_df_infant), Sero_df) 
+
+# distribution of CCs Overall
+CC_df <- data_clean |> 
+        group_by(CC)|> 
+        summarise(N_p= n())|> 
+        mutate("Total"= paste0(N_p, " (",round(100*(N_p/sum(N_p)),1), "%)"))|>
+  select(-N_p)
+# distribution of CCs in infants
+CC_df_infant <- data_clean |> 
+        filter(infant ==1) |> 
+        group_by(CC)|> 
+        summarise(N_p= n())|> 
+        mutate("Total Infants"= paste0(N_p, " (",round(100*(N_p/sum(N_p)),1), "%)"))|>
+  select(-N_p)
 
 # Age distribution of CCs
 Age_CC_df <- data_clean |>
@@ -66,8 +90,14 @@ Age_CC_df <- data_clean |>
   replace_na(list("EOD" = 0, "LOD" = 0, "VLOD" = 0, "Older Children (1-18 years)" = 0, "Adults" = 0))|>
   mutate(across(c("EOD", "LOD", "VLOD","Older Children (1-18 years)", "Adults"), ~ paste(., " (", round(. / sum(.) * 100), "%)", sep="")))
 
+# Join everything
+Age_CC_df_FINAL <- left_join(left_join(Age_CC_df, CC_df_infant), CC_df) 
+
+
 # Join for final table 
-Age_Sero_CC_df <- rbind(Age_Sero_df |> rename("group"="Serotype"),Age_CC_df|> rename("group"="CC"))
+Age_Sero_CC_df <- rbind(Age_Sero_df_FINAL |> rename("group"="Serotype"), Age_CC_df_FINAL|> rename("group"="CC"))%>%
+  mutate(group = factor(group, levels = c("Ia", "Ib", "II", "III", "IV", "V", "1", "12", "17", "19", "23", "459"))) %>%
+  arrange(group)
 Age_Sero_CC_df
 ```
 # Figure 1 - Figure
@@ -696,7 +726,7 @@ heatmap_Meningitis <- ggplot(df_Meningitis, aes(x = Gene, y = as.factor(Meningit
 # Join
 library(patchwork)
 heatmap <- (heatmap_year) |(heatmap_Serotype /  heatmap_CC) | (heatmap_ICU / heatmap_Meningitis ) 
-
+heatmap
 ```
 
 

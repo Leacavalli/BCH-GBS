@@ -83,7 +83,7 @@ cd 3.SEROTYPE_MLST
 for i in ../1.TRIMMED_READS/*_trimmed_1.fq.gz
 do
  base=$(echo $i | cut -d '/' -f3-3 | cut -d '_' -f1-1)
- sbatch -p shared -c 1 -t 0-00:10 --mem=10000 --wrap="srst2 --input_pe ../1.TRIMMED_READS/$base\_trimmed_{1,2}.fq.gz --output $base --log --gene_db ../Files/GBS-SBG.fasta --mlst_db ../Files/Streptococcus_agalactiae.fasta --mlst_definitions ../Files/profiles_csv --mlst_delimiter '_'"
+ sbatch -p shared -c 1 -t 0-00:30 --mem=10000 --wrap="srst2 --input_pe ../1.TRIMMED_READS/$base\_trimmed_{1,2}.fq.gz --output $base --log --gene_db ../Files/GBS-SBG.fasta --mlst_db ../Files/Streptococcus_agalactiae.fasta --mlst_definitions ../Files/profiles_csv --mlst_delimiter '_'"
 done
 cd ../
 ```
@@ -184,7 +184,7 @@ source activate quast
 ```
 mkdir 6.QUAST
 cd 6.QUAST
-for i in ../ 5.ASSEMBLY/*fasta
+for i in ../5.ASSEMBLY/*fasta
 do
   base=$(echo $i | cut -d '/' -f3-3 | cut -d '.' -f1-1)
  sbatch -p shared -c 1 -t 0-00:10 --mem=10000 --wrap="quast -o $base\.quast.out $i"
@@ -204,7 +204,7 @@ source activate fastani
 ```
 mkdir 7.FastANI
 cd 7.FastANI
-for i in ../ 5.ASSEMBLY/*fasta
+for i in ../5.ASSEMBLY/*fasta
 do
   base=$(echo $i | cut -d '/' -f3-3 | cut -d '.' -f1-1)
  sbatch -p shared -c 1 -t 0-00:10 --mem=10000 --wrap="fastANI -q $i -r ../Files/AP018935.1.fa -o $base\.fastani.out"
@@ -225,7 +225,7 @@ source activate abricate
 ```
 mkdir 8.ABRICATE
 cd 8.ABRICATE
-for i in ../ 5.ASSEMBLY/*fasta
+for i in ../5.ASSEMBLY/*fasta
 do
   base=$(echo $i | cut -d '/' -f3-3 | cut -d '.' -f1-1)
  sbatch -p shared -c 1 -t 0-00:10 --mem=10000 --wrap="abricate --db vfdb $i > $base\_vfdb.tab"
@@ -241,37 +241,50 @@ cd ../
   mkdir -p 5.ASSEMBLIES/Filter_out_QC
   mkdir -p 8.ABRICATE/Filter_out_QC
 
-  for i in ../0.RAW_READS/*1.fastq.gz
-  do
-    # Extract information from the QUAST report
-      ANI=$(cat 7.FastANI/$base\.fastani.out | awk '{print $3}')
-      n50=$(grep -w "N50" 6.QUAST/$base\.quast.out/report.txt | awk '{print $2}')
-      gc=$(grep -w "GC (%)" 6.QUAST/$base\.quast.out/report.txt | awk '{print $3}')
-      total_length=$(grep -w "Total length" 6.QUAST/$base\.quast.out/report.txt | grep -v "(>= " | awk '{print $3}')
-      contigs=$(grep "^# contigs " 6.QUAST/$base\.quast.out/report.txt | tail -1 | awk '{print $3}')
-      Adapter_content_1=$(grep "Adapter Content" 2.FASTQC/$base\_trimmed_1_fastqc/summary.txt | awk '{print $1}')
-      Adapter_content_2=$(grep "Adapter Content" 2.FASTQC/$base\_trimmed_2_fastqc/summary.txt | awk '{print $1}')
+  for i in 0.RAW_READS/*1.fastq.gz
+do
+  base=$(echo $i | cut -d '/' -f2 | cut -d '_' -f1)
 
-    # Check the conditions and move files if necessary
-      if (( $(echo "$ANI < 95" | bc -l) )) || [ "$n50" -lt 30000 ] || [ "$contigs" -gt 250 ] || (( $(echo "$gc <= 30" | bc -l) )) || (( $(echo "$gc >= 40" | bc -l) )) || [ "$total_length" -lt 1700000 ] || [ "$total_length" -gt 2400000 ] || [[ "$Adapter_content_1" == "FAIL" || "$Adapter_content_2" == "FAIL" ]]; then
-        # Check if the SNIPPY directory exists, and move it if it does
-        if [ -d "4.SNIPPY/$base\" ]; then
-          mv 4.SNIPPY/$base\ 4.SNIPPY/Filter_out_QC
-        fi
-        # Check if the assembly fasta file exists, and move it if it does
-        if [ -f "5.ASSEMBLIES/$base\.fasta" ]; then
-        mv 5.ASSEMBLIES/$base\.fasta 5.ASSEMBLIES/Filter_out_QC
-        fi
-        # Check if the abricate output file exists, and move it if it does
-        if [ -f "8.ABRICATE/$base\_vfdb.tab" ]; then
-        mv 8.ABRICATE/$base\_vfdb.tab 8.ABRICATE/Filter_out_QC
-        fi
-        # Check if the abricate output file exists, and move it if it does
-        if [ -f "8.ABRICATE/$base\_sip_gene.tab" ]; then
-        mv 8.ABRICATE/$base\_sip_gene.tab 8.ABRICATE/Filter_out_QC
-        fi
-      fi
-  done
+  # Extract information from the QUAST report
+  ANI=$(awk '{print $3}' 7.FastANI/$base.fastani.out)
+  n50=$(grep -w "N50" 6.QUAST/$base.quast.out/report.txt | awk '{print $2}')
+  gc=$(grep -w "GC (%)" 6.QUAST/$base.quast.out/report.txt | awk '{print $3}')
+  total_length=$(grep -w "Total length" 6.QUAST/$base.quast.out/report.txt | grep -v "(>= " | awk '{print $3}')
+  contigs=$(grep "^# contigs " 6.QUAST/$base.quast.out/report.txt | tail -1 | awk '{print $3}')
+  Adapter_content_1=$(grep "Adapter Content" 2.FASTQC/${base}_trimmed_1_fastqc/summary.txt | awk '{print $1}')
+  Adapter_content_2=$(grep "Adapter Content" 2.FASTQC/${base}_trimmed_2_fastqc/summary.txt | awk '{print $1}')
+
+  # Check the conditions and move files if necessary
+  if (( $(echo "$ANI < 95" | bc -l) )) ||
+     [ "$n50" -lt 30000 ] ||
+     [ "$contigs" -gt 250 ] ||
+     (( $(echo "$gc <= 30" | bc -l) )) ||
+     (( $(echo "$gc >= 40" | bc -l) )) ||
+     [ "$total_length" -lt 1700000 ] ||
+     [ "$total_length" -gt 2400000 ] ||
+     [[ "$Adapter_content_1" == "FAIL" || "$Adapter_content_2" == "FAIL" ]]
+  then
+    # Check if the SNIPPY directory exists, and move it if it does
+    if [ -d "4.SNIPPY/$base" ]; then
+      mv 4.SNIPPY/$base 4.SNIPPY/Filter_out_QC/
+    fi
+
+    # Check if the assembly fasta file exists, and move it if it does
+    if [ -f "5.ASSEMBLIES/$base.fasta" ]; then
+      mv 5.ASSEMBLIES/$base.fasta 5.ASSEMBLIES/Filter_out_QC/
+    fi
+
+    # Check if the abricate output file exists, and move it if it does
+    if [ -f "8.ABRICATE/${base}_vfdb.tab" ]; then
+      mv 8.ABRICATE/${base}_vfdb.tab 8.ABRICATE/Filter_out_QC/
+    fi
+
+    if [ -f "8.ABRICATE/${base}_sip_gene.tab" ]; then
+      mv 8.ABRICATE/${base}_sip_gene.tab 8.ABRICATE/Filter_out_QC/
+    fi
+  fi
+done
+
 ```
 
 
@@ -279,11 +292,11 @@ cd ../
 # 9. ASSIGN_CC
 ```
 # Create Output Directory
-mkdir -p 9.ASSIGN_CC
+mkdir 9.ASSIGN_CC
 
 # Append all results from mlst to a single file
 awk '(NR == 1) || (FNR > 1)' 3.SEROTYPE_MLST/*__mlst__Streptococcus_agalactiae__results.txt > 3.SEROTYPE_MLST/combined_results.txt
-cut -f1,2 3.SEROTYPE_MLST/combined_results.txt  | tail -n +2  | sed 's/\t/,/g' | sort -t',' -k2,2  > 9.ASSIGN_CC/STs.txt
+cut -f1,2 3.SEROTYPE_MLST/combined_results.txt  | tail -n +2  | sed 's/\t/,/g' | sort -t',' -k2,2 | sed 's/\*//g' > 9.ASSIGN_CC/STs.txt
 
 # Define the file paths
 cut -d',' -f1,9 Files/GBS_CC_profiles.csv | tail -n +2  | sort -t',' -k1,1 > 9.ASSIGN_CC/GBS_ST_CC_ref.txt
