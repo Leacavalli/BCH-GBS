@@ -1,0 +1,182 @@
+---
+title: "Sero_ST_CC_distribution_BCH"
+output: html_document
+date: "2023-09-18"
+---
+
+```{r}
+# Clean environment
+rm( list = ls() )
+
+# load libraries
+library(tidyverse)
+
+# load metadata
+setwd("~/Harvard/Research/GBS/Figures")
+metadata_BCH <- read.csv("metadata_BCH_05292024.csv") |> 
+  mutate(Age_cat=factor(Age_cat, levels=c("EOD", "LOD","VLOD", "older children (1-17yr)", "adults (>18yr)")))
+table(metadata_BCH$Age_cat)
+```
+
+```{r}
+# Serotype distribution by Age group
+table(metadata_BCH$Serotype)
+
+tab_n_Age_Serotype <- table(metadata_BCH$Age_cat, metadata_BCH$Serotype)
+
+tab_prop_Age_Serotype <- metadata_BCH |>
+  group_by(Age_cat) |>
+  summarise(prop.Ia  = round(100*(mean(Serotype=="Ia"))),
+            prop.Ib  = round(100*(mean(Serotype=="Ib"))),
+            prop.II  = round(100*(mean(Serotype=="II"))),
+            prop.III = round(100*(mean(Serotype=="III"))),
+            prop.IV  = round(100*(mean(Serotype=="IV"))),
+            prop.V   = round(100*(mean(Serotype=="V"))))
+
+tab_Age_Serotype <- tab_n_Age_Serotype
+for (i in 1: nrow(tab_Age_Serotype)){
+  for (j in 1: ncol(tab_Age_Serotype)){
+    tab_Age_Serotype[i,j] <- paste(tab_n_Age_Serotype[i,j], " (", tab_prop_Age_Serotype[i,j+1], "%)", sep="")
+  }
+}
+
+tab_Age_Serotype <- reshape(as.data.frame(tab_Age_Serotype), idvar = "Var2", timevar = "Var1", direction = "wide")
+colnames(tab_Age_Serotype) <- c("Serotypes", rownames(tab_n_Age_Serotype))
+tab_Age_Serotype
+
+# Totals
+Totals_Serotype <- metadata_BCH |>
+    mutate(Serotype=factor(Serotype, levels=c("Ia", "Ib","II", "III", "IV", "V")))|>
+  group_by(Serotype) |>
+  summarise(N.EOD  = sum(Age_cat=="EOD"),
+            N.LOD  = sum(Age_cat=="LOD"),
+            N.VLOD  = sum(Age_cat=="VLOD"),
+            N.older_children = sum(Age_cat=="older children (1-17yr)"),
+            N.adults  = sum(Age_cat=="adults (>18yr)"))
+
+paste(rowSums(Totals_Serotype[,-1]), " (", round(100*(rowSums(Totals_Serotype[,-1])/87)), "%)", sep="")
+
+```
+
+```{r}
+# ST distribution by Age group
+table(metadata_BCH$ST)
+
+tab_n_Age_ST <- table(metadata_BCH$Age_cat, metadata_BCH$ST)
+metadata_BCH |> filter(is.na(ST))
+
+tab_prop_Age_ST <- metadata_BCH |>
+  group_by(Age_cat) |>
+  summarise(prop.ST1   = round(100*(mean(ST=="1", na.rm = T))),
+            prop.ST8   = round(100*(mean(ST=="8", na.rm = T))),
+            prop.ST10  = round(100*(mean(ST=="10", na.rm = T))),
+            prop.ST17  = round(100*(mean(ST=="17", na.rm = T))),
+            prop.ST19  = round(100*(mean(ST=="19", na.rm = T))),
+            prop.ST23  = round(100*(mean(ST=="23", na.rm = T))),
+            prop.ST28  = round(100*(mean(ST=="28", na.rm = T))),
+            prop.ST31  = round(100*(mean(ST=="31", na.rm = T))),
+            prop.ST88  = round(100*(mean(ST=="88", na.rm = T))),
+            prop.ST109 = round(100*(mean(ST=="109", na.rm = T))),
+            prop.ST335 = round(100*(mean(ST=="335", na.rm = T))),
+            prop.ST459 = round(100*(mean(ST=="459", na.rm = T))),
+            prop.ST860 = round(100*(mean(ST=="860", na.rm = T))))
+
+tab_Age_ST <- tab_n_Age_ST
+
+for (i in 1: nrow(tab_Age_ST)){
+  for (j in 1: ncol(tab_Age_ST)){
+    tab_Age_ST[i,j] <- paste(tab_n_Age_ST[i,j], " (", tab_prop_Age_ST[i,j+1], "%)", sep="")
+  }
+}
+
+
+
+tab_Age_ST <- reshape(as.data.frame(tab_Age_ST), idvar = "Var2", timevar = "Var1", direction = "wide")
+colnames(tab_Age_ST) <- c("ST", rownames(tab_n_Age_Serotype))
+tab_Age_ST
+
+
+# Totals
+ST_levels <- sort(unique(metadata_BCH$ST))
+Totals_ST <- metadata_BCH |> 
+  mutate(ST=ifelse(is.na(ST), "New ST", ST))|>
+  mutate(ST=factor(ST, levels=c(ST_levels, "New ST")))|>
+  group_by(ST) |>
+  summarise(N.EOD  = sum(Age_cat=="EOD"),
+            N.LOD  = sum(Age_cat=="LOD"),
+            N.VLOD  = sum(Age_cat=="VLOD"),
+            N.older_children = sum(Age_cat=="older children (1-17yr)"),
+            N.adults  = sum(Age_cat=="adults (>18yr)"))
+
+data.frame(paste(rowSums(Totals_ST[,-1]), " (", round(100*(rowSums(Totals_ST[,-1])/87)), "%)", sep="")
+)
+```
+
+```{r}
+# CC diCCribution by Age group
+table(metadata_BCH$CC)
+
+tab_n_Age_CC <- table(metadata_BCH$Age_cat, metadata_BCH$CC)
+
+tab_prop_Age_CC <- metadata_BCH |>
+  group_by(Age_cat) |>
+  summarise(prop.CC1   = round(100*(mean(CC=="1"))),
+            prop.CC12   = round(100*(mean(CC=="12"))),
+            prop.CC17  = round(100*(mean(CC=="17"))),
+            prop.CC19  = round(100*(mean(CC=="19"))),
+            prop.CC23  = round(100*(mean(CC=="23"))))
+
+tab_Age_CC <- tab_n_Age_CC
+
+for (i in 1: nrow(tab_Age_CC)){
+  for (j in 1: ncol(tab_Age_CC)){
+    tab_Age_CC[i,j] <- paste(tab_n_Age_CC[i,j], " (", tab_prop_Age_CC[i,j+1], "%)", sep="")
+  }
+}
+
+tab_Age_CC <- reshape(as.data.frame(tab_Age_CC), idvar = "Var2", timevar = "Var1", direction = "wide")
+colnames(tab_Age_CC) <- c("CC", rownames(tab_n_Age_Serotype))
+tab_Age_CC
+
+# Totals
+Totals_CC <- metadata_BCH |>
+    mutate(CC=factor(CC, levels=c("1", "12","17", "19", "23")))|>
+  group_by(CC) |>
+  summarise(N.EOD  = sum(Age_cat=="EOD"),
+            N.LOD  = sum(Age_cat=="LOD"),
+            N.VLOD  = sum(Age_cat=="VLOD"),
+            N.older_children = sum(Age_cat=="older children (1-17yr)"),
+            N.adults  = sum(Age_cat=="adults (>18yr)"))
+
+data.frame(paste(rowSums(Totals_CC[,-1]), " (", round(100*(rowSums(Totals_CC[,-1])/87)), "%)", sep=""))
+```
+
+
+```{r}
+# CC by serotypes
+
+tab_n_sero_CC <- table(metadata_BCH$Serotype, metadata_BCH$CC)
+
+tab_prop_sero_CC <- metadata_BCH |>
+  mutate(Serotype= factor(Serotype, levels= c("Ia", "Ib","II","III","IV","V")))|>
+  group_by(Serotype) |>
+  summarise(prop.CC1   = round(100*(mean(CC=="1"))),
+            prop.CC12   = round(100*(mean(CC=="12"))),
+            prop.CC17  = round(100*(mean(CC=="17"))),
+            prop.CC19  = round(100*(mean(CC=="19"))),
+            prop.CC23  = round(100*(mean(CC=="23"))))
+
+
+tab_sero_CC <- tab_n_sero_CC
+
+for (i in 1: nrow(tab_sero_CC)){
+  for (j in 1: ncol(tab_sero_CC)){
+    tab_sero_CC[i,j] <- paste(tab_n_sero_CC[i,j], " (", tab_prop_sero_CC[i,j+1], "%)", sep="")
+  }
+}
+
+tab_sero_CC <- reshape(as.data.frame(tab_sero_CC), idvar = "Var2", timevar = "Var1", direction = "wide")
+colnames(tab_sero_CC) <- c("CC", rownames(tab_n_sero_CC))
+tab_sero_CC
+
+```

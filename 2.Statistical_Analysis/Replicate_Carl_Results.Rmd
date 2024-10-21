@@ -1,0 +1,262 @@
+---
+title: "Replicate results"
+output: html_document
+date: "2024-10-16"
+---
+```{r}
+# load libraries
+library(xlsx)
+library(tidyverse)
+library(khroma)
+library(colorBlindness)
+library(ggplot2)
+
+# load data
+setwd("~/")
+data_Carl <- read.csv("1.1_Mastersheet_BCH.csv") |> 
+  filter(!is.na(ID)) |>
+  mutate(infant= ifelse(days_at_dx <=365, 1, 0))|>
+  mutate(infant= factor(infant, levels=c(1,0)))|>
+  mutate(Meningitis= ifelse(isolated_from == "blood", 0, 1))
+  
+```
+
+# Invasive GBS surveillance
+```{r}
+# Number of patients 
+nrow(data)
+
+# Isolation from blood vs CSF
+table(data$isolated_from)
+
+# Age group at Diagnosis
+table(data$Age_cat)
+
+# Distribution of Serotypes
+table(data$Serotype)
+table(data |> filter(infant ==1) |> pull(Serotype))
+table(data |> filter(Age_cat == "90days-17yr") |> pull(Serotype))
+
+```
+
+
+# Clinical Characteristics
+```{r}
+
+# Difference in laboratory parameters between infants and older children on admission. 
+## P-values
+p_val_Hb <- round(wilcox.test(Hb ~ infant, data = data_Carl), 3)
+p_val_WBC <- round(wilcox.test(WBC ~ infant, data = data|> filter(days_at_dx <= (365*18)))$p.value, 3)
+p_val_Leucocytosis <- round(coef(summary(glm(Leucocytosis ~ infant, data|> filter(days_at_dx <= (365*18)), family = binomial)))[2,4], 3)
+p_val_Leucopenia <- round(coef(summary(glm(Leucopenia ~ infant, data|> filter(days_at_dx <= (365*18)), family = binomial)))[2,4], 3)
+p_val_platelet <- round(wilcox.test(platelet ~ infant, data = data|> filter(days_at_dx <= (365*18)))$p.value, 3)
+p_val_ANC <- round(wilcox.test(ANC ~ infant, data = data|> filter(days_at_dx <= (365*18)))$p.value, 3)
+p_val_Neutropenia <- round(coef(summary(glm(Neutropenia ~ infant, data|> filter(days_at_dx <= (365*18)), family = binomial)))[2,4], 3)
+## Table
+Table1_1 <- data |> 
+  filter(days_at_dx <= (365*18))|>
+  group_by(infant)|>
+  summarise(N=n(), 
+            Hb_mean_SD= paste(round(mean(Hb, na.rm=T),2), " (", round(sd(Hb, na.rm=T), 2),")", sep=""), 
+            WBC_mean_SD= paste(round(mean(WBC, na.rm=T),2), " (", round(sd(WBC, na.rm=T),2),")", sep=""), 
+            Leucocytosis_Yes_p = paste(sum(Leucocytosis==1, na.rm = T), " (", round(100*mean(Leucocytosis==1, na.rm = T), 1),")", sep=""), 
+            Leucopenia_Yes_p  = paste(sum(Leucopenia==1, na.rm = T), " (", round(100*mean(Leucopenia==1, na.rm = T), 1),")", sep=""), 
+            Platelet_mean_SD= paste(round(mean(platelet, na.rm=T),2), " (",  round(sd(platelet, na.rm=T),2),")", sep=""), 
+            ANC_mean_SD= paste(round(mean(ANC, na.rm=T),2), " (",  round(sd(ANC, na.rm=T),2),")", sep=""), 
+            Neutropenia_Yes_p = paste(sum(Neutropenia==1, na.rm = T), " (",  round(100*mean(Neutropenia==1, na.rm = T),1),")", sep="")) 
+Table1_1 <- rbind(Table1_1, c(NA, "p-value", p_val_Hb, p_val_WBC, p_val_Leucocytosis, p_val_Leucopenia, p_val_platelet, p_val_ANC,p_val_Neutropenia))
+
+
+# ICU vs other  
+## P-values
+p_val_2_Hb <- round(wilcox.test(Hb ~ Admission_loc, data = data|> filter(days_at_dx <= 365))$p.value, 3)
+p_val_2_WBC <- round(wilcox.test(WBC ~ Admission_loc, data = data|> filter(days_at_dx <= 365))$p.value, 3)
+p_val_2_Leucocytosis <- round(coef(summary(glm(Leukocytosis ~ Admission_loc, data|> filter(days_at_dx <= 365), family = binomial)))[2,4], 3)
+p_val_2_Leucopenia <- round(coef(summary(glm(Leukopenia ~ Admission_loc, data|> filter(days_at_dx <= 365), family = binomial)))[2,4], 3)
+p_val_2_platelet <- round(wilcox.test(platelet ~ Admission_loc, data = data|> filter(days_at_dx <= 365))$p.value, 3)
+p_val_2_ANC <- round(wilcox.test(ANC ~ Admission_loc, data = data|> filter(days_at_dx <= 365))$p.value, 3)
+p_val_2_Neutropenia <- round(coef(summary(glm(Neutropenia ~ Admission_loc, data|> filter(days_at_dx <= 365), family = binomial)))[2,4], 3)
+## Table
+Table1_2 <- data |> 
+  mutate(Admission_loc= factor(Admission_loc, levels= c("other", "ICU")))|>
+  filter(days_at_dx <= 365)|>
+  group_by(Admission_loc)|>
+  summarise(N=n(), 
+            Hb_mean_SD= paste(round(mean(Hb, na.rm=T),2), " (", round(sd(Hb, na.rm=T), 2),")", sep=""), 
+            WBC_mean_SD= paste(round(mean(WBC, na.rm=T),2), " (", round(sd(WBC, na.rm=T),2),")", sep=""), 
+            Leucocytosis_Yes_p = paste(sum(Leukocytosis==1, na.rm = T), " (", round(100*mean(Leukocytosis==1, na.rm = T), 1),")", sep=""), 
+            Leucopenia_Yes_p  = paste(sum(Leukopenia==1, na.rm = T), " (", round(100*mean(Leukopenia==1, na.rm = T), 1),")", sep=""), 
+            Platelet_mean_SD= paste(round(mean(platelet, na.rm=T),2), " (",  round(sd(platelet, na.rm=T),2),")", sep=""), 
+            ANC_mean_SD= paste(round(mean(ANC, na.rm=T),2), " (",  round(sd(ANC, na.rm=T),2),")", sep=""), 
+            Neutropenia_Yes_p = paste(sum(Neutropenia==1, na.rm = T), " (",  round(100*mean(Neutropenia==1, na.rm = T),1),")", sep="")) 
+Table1_2 <- rbind(Table1_2, c(NA, "p-value", p_val_2_Hb, p_val_2_WBC, p_val_2_Leucocytosis, p_val_2_Leucopenia, p_val_2_platelet, p_val_2_ANC,p_val_2_Neutropenia))
+Table1_2
+
+
+# ICU vs other  
+## P-values
+p_val_3_Hb <- round(wilcox.test(Hb ~ Meningitis, data = data|> filter(days_at_dx <= 365))$p.value, 3)
+p_val_3_WBC <- round(wilcox.test(WBC ~ Meningitis, data = data|> filter(days_at_dx <= 365))$p.value, 3)
+p_val_3_Leucocytosis <- round(coef(summary(glm(Leucocytosis ~ Meningitis, data|> filter(days_at_dx <= 365), family = binomial)))[2,4], 3)
+p_val_3_Leucopenia <- round(coef(summary(glm(Leucopenia ~ Meningitis, data|> filter(days_at_dx <= 365), family = binomial)))[2,4], 3)
+p_val_3_platelet <- round(wilcox.test(platelet ~ Meningitis, data = data|> filter(days_at_dx <= 365))$p.value, 3)
+p_val_3_ANC <- round(wilcox.test(ANC ~ Meningitis, data = data|> filter(days_at_dx <= 365))$p.value, 3)
+p_val_3_Neutropenia <- round(coef(summary(glm(Neutropenia ~ Meningitis, data|> filter(days_at_dx <= 365), family = binomial)))[2,4], 3)
+## Table
+Table1_3 <- data |> 
+  filter(days_at_dx <= 365)|>
+  group_by(Meningitis)|>
+  summarise(N=n(), 
+            Hb_mean_SD= paste(round(mean(Hb, na.rm=T),2), " (", round(sd(Hb, na.rm=T), 2),")", sep=""), 
+            WBC_mean_SD= paste(round(mean(WBC, na.rm=T),2), " (", round(sd(WBC, na.rm=T),2),")", sep=""), 
+            Leucocytosis_Yes_p = paste(sum(Leucocytosis==1, na.rm = T), " (", round(100*mean(Leucocytosis==1, na.rm = T), 1),")", sep=""), 
+            Leucopenia_Yes_p  = paste(sum(Leucopenia==1, na.rm = T), " (", round(100*mean(Leucopenia==1, na.rm = T), 1),")", sep=""), 
+            Platelet_mean_SD= paste(round(mean(platelet, na.rm=T),2), " (",  round(sd(platelet, na.rm=T),2),")", sep=""), 
+            ANC_mean_SD= paste(round(mean(ANC, na.rm=T),2), " (",  round(sd(ANC, na.rm=T),2),")", sep=""), 
+            Neutropenia_Yes_p = paste(sum(Neutropenia==1, na.rm = T), " (",  round(100*mean(Neutropenia==1, na.rm = T),1),")", sep="")) 
+Table1_3 <- rbind(Table1_3, c(NA, "p-value", p_val_3_Hb, p_val_3_WBC, p_val_3_Leucocytosis, p_val_3_Leucopenia, p_val_3_platelet, p_val_3_ANC,p_val_3_Neutropenia))
+Table1_3
+```
+# Molecular characteristics of the bacterial population
+```{r}
+# CC distribution
+data |>
+  group_by(CC)|>
+  summarise(N= n())|>
+  mutate(p= round(100*(N/sum(N))))|>
+  arrange(-N)
+
+# ST distribution
+data |>
+  group_by(ST)|>
+  summarise(N= n())|>
+  mutate(p= round(100*(N/sum(N))))|>
+  arrange(-N)
+
+# STs by CC distribution
+data |>
+  group_by(CC, ST)|>
+  summarise(N= n())|>
+  mutate(p= round(100*(N/sum(N))))
+
+# age distribution of patients infected with the various STs 
+data |>
+  mutate(Age_cat = factor(Age_cat, levels = c("EOD", "LOD", "90days-17yr", "18-39yrs"))) |>
+  group_by(CC, Age_cat) |>
+  summarise(N = n(), .groups = "drop") |>
+  mutate(N_p = paste(N, "(", round(100 * (N / sum(N))), "%)")) |>
+  select(-N) |>
+  pivot_wider(names_from = Age_cat, values_from = N_p) |>
+  replace_na(list("EOD" = "0(0%)", "LOD" = "0(0%)", "90days-17yr" = "0(0%)", "18-39yrs" = "0(0%)"))
+
+
+# Serotype distribution by ST
+data |>
+  group_by(ST, Serotype)|>
+  summarise(N= n())|>
+  mutate(p= round(100*(N/sum(N))))
+
+
+# Serotype distribution by CC
+data |>
+  group_by(CC, ST, Serotype)|>
+  summarise(N= n())|>
+  mutate(p= round(100*(N/sum(N))))
+
+```
+
+# Coverage of genes encoding proteins of vaccine targets 
+```{r}
+# Distribution of ALP family proteins
+data |>
+  filter(days_at_dx <= 365)|>
+  mutate(ALP_FAM= Surface_protein.ALPHA+Surface_protein.ALP1+Surface_protein.ALP23+Surface_protein.RIB)|>
+  summarise(ALP_FAM= mean(ALP_FAM>0), 
+            ALPHA = paste(sum(Surface_protein.ALPHA ==1), " (",round(100*mean(Surface_protein.ALPHA ==1)), "%)", sep=""), 
+            ALP1 = paste(sum(Surface_protein.ALP1 ==1), " (",round(100*mean(Surface_protein.ALP1 ==1)), "%)", sep=""), 
+            ALP23 = paste(sum(Surface_protein.ALP23 ==1), " (",round(100*mean(Surface_protein.ALP23 ==1)), "%)", sep=""), 
+            RIB = paste(sum(Surface_protein.RIB ==1), " (",round(100*mean(Surface_protein.RIB ==1)), "%)", sep=""))
+
+# Distribution of ALP family proteins per CC
+data |>
+  filter(days_at_dx <= 365)|>
+  group_by(CC)|>
+  summarise(N=n(),
+            ALPHA = paste(sum(Surface_protein.ALPHA ==1), " (",round(100*mean(Surface_protein.ALPHA ==1)), "%)", sep=""), 
+            ALP1 = paste(sum(Surface_protein.ALP1 ==1), " (",round(100*mean(Surface_protein.ALP1 ==1)), "%)", sep=""), 
+            ALP23 = paste(sum(Surface_protein.ALP23 ==1), " (",round(100*mean(Surface_protein.ALP23 ==1)), "%)", sep=""), 
+            RIB = paste(sum(Surface_protein.RIB ==1), " (",round(100*mean(Surface_protein.RIB ==1)), "%)", sep=""))
+
+# Distribution of PILUS island
+data |>
+  filter(days_at_dx <= 365)|>
+  mutate(PILUS_island = Virulence_factor.PI_1 + Virulence_factor.PI_2a)|>
+  summarise(PILUS_island= mean(PILUS_island>0))
+
+# Distribution of other proteins
+  data |>
+  filter(days_at_dx <= 365)|>
+  mutate(SRR = Surface_protein.SRR1+Surface_protein.SRR2)|>
+  summarise(HVGA = paste(sum(Surface_protein.HVGA ==1), " (",round(100*mean(Surface_protein.HVGA ==1)), "%)", sep=""), 
+            SRR = paste(sum(SRR ==1), " (",round(100*mean(SRR ==1)), "%)", sep=""), 
+           SRR1 = paste(sum(Surface_protein.SRR1 ==1), " (",round(100*mean(Surface_protein.SRR1 ==1)), "%)", sep=""), 
+           SRR2 = paste(sum(Surface_protein.SRR2 ==1), " (",round(100*mean(Surface_protein.SRR2 ==1)), "%)", sep=""), 
+           C5a = paste(sum(Virulence_factor.C5a_peptidase ==1), " (",round(100*mean(Virulence_factor.C5a_peptidase ==1)), "%)", sep=""), 
+           FbsB = paste(sum(Virulence_factor.FbsB ==1), " (",round(100*mean(Virulence_factor.FbsB ==1)), "%)", sep=""), 
+           Lmb = paste(sum(Virulence_factor.Lmb ==1), " (",round(100*mean(Virulence_factor.Lmb ==1)), "%)", sep=""))
+
+data |>
+  mutate(ALP_FAM= Surface_protein.ALPHA+Surface_protein.ALP1+Surface_protein.ALP23+Surface_protein.RIB)|>
+  mutate(PILUS_island = Virulence_factor.PI_1 + Virulence_factor.PI_2a)|>
+  mutate(SRR = Surface_protein.SRR1+Surface_protein.SRR2)|>
+  group_by(Age_cat)|>
+  summarise(N=n(),
+            ALP_FAM= mean(ALP_FAM>0), 
+            ALPHA = paste(sum(Surface_protein.ALPHA ==1), " (",round(100*mean(Surface_protein.ALPHA ==1)), "%)", sep=""), 
+            ALP1 = paste(sum(Surface_protein.ALP1 ==1), " (",round(100*mean(Surface_protein.ALP1 ==1)), "%)", sep=""), 
+            ALP23 = paste(sum(Surface_protein.ALP23 ==1), " (",round(100*mean(Surface_protein.ALP23 ==1)), "%)", sep=""), 
+            RIB = paste(sum(Surface_protein.RIB ==1), " (",round(100*mean(Surface_protein.RIB ==1)), "%)", sep=""), 
+            PILUS_island= mean(PILUS_island>0),
+            SRR = paste(sum(SRR ==1), " (",round(100*mean(SRR ==1)), "%)", sep=""), 
+           SRR1 = paste(sum(Surface_protein.SRR1 ==1), " (",round(100*mean(Surface_protein.SRR1 ==1)), "%)", sep=""), 
+           SRR2 = paste(sum(Surface_protein.SRR2 ==1), " (",round(100*mean(Surface_protein.SRR2 ==1)), "%)", sep=""), 
+           C5a = paste(sum(Virulence_factor.C5a_peptidase ==1), " (",round(100*mean(Virulence_factor.C5a_peptidase ==1)), "%)", sep=""), 
+           FbsB = paste(sum(Virulence_factor.FbsB ==1), " (",round(100*mean(Virulence_factor.FbsB ==1)), "%)", sep=""), 
+           Lmb = paste(sum(Virulence_factor.Lmb ==1), " (",round(100*mean(Virulence_factor.Lmb ==1)), "%)", sep=""))
+
+  
+  
+```
+
+# Correlation between phenotypic antibiotic resistance and presence of known genotypic markers 
+```{r}
+# Phenotypic resistance testing 
+data |>
+  summarise(N_p_Penicillin= paste(sum(Penicillin ==1), " (",round(100*mean(Penicillin ==1)), "%)", sep=""), 
+            N_p_Vancomycin= paste(sum(Vancomycin ==1), " (",round(100*mean(Vancomycin ==1)), "%)", sep=""), 
+            N_p_Erythromycin= paste(sum(Erythromycin ==1), " (",round(100*mean(Erythromycin ==1)), "%)", sep=""), 
+            N_p_Clindamycin= paste(sum(Clindamycin ==1), " (",round(100*mean(Clindamycin ==1)), "%)", sep=""))
+
+# In-silico detection resistance genes
+data |>
+  summarise(N_p_Penicillin= paste(sum(Penicillin ==1), " (",round(100*mean(Penicillin ==1)), "%)", sep=""), 
+            N_p_Vancomycin= paste(sum(Vancomycin ==1), " (",round(100*mean(Vancomycin ==1)), "%)", sep=""), 
+            N_p_Erythromycin= paste(sum(Erythromycin ==1), " (",round(100*mean(Erythromycin ==1)), "%)", sep=""), 
+            N_p_Clindamycin= paste(sum(Clindamycin ==1), " (",round(100*mean(Clindamycin ==1)), "%)", sep=""))
+
+
+```
+
+# Identifying correlates  of severe clinical outcomes
+```{r}
+p_srr1 <- round(coef(summary(glm(Surface_protein.SRR1 ~ Admission_loc, data|> filter(days_at_dx <= 365), family = binomial)))[2,4], 3)
+p_srr1 <- round(coef(summary(glm(Surface_protein.SRR1 ~ Admission_loc, data|> filter(days_at_dx <= 365), family = binomial)))[2,4], 3)
+
+data |>
+  filter(days_at_dx <= 365)|>
+  group_by(Admission_loc)|>
+  summarise(N= n(), 
+            SSR1_N_p = paste(sum(Surface_protein.SRR1 ==1), " (",round(100*mean(Surface_protein.SRR1 ==1), 1), "%)", sep=""))
+
+```
+

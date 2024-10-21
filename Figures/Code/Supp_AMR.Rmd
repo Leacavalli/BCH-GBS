@@ -1,0 +1,254 @@
+---
+title: "AMR analysis"
+output: html_document
+date: "2024-05-29"
+---
+
+
+```{r}
+# Clean environment
+rm( list = ls() )
+
+# load libraries
+library(tidyverse)
+
+# load metadata
+setwd("~/Harvard/Research/GBS/Figures")
+metadata_BCH <- read.csv("metadata_BCH_05292024.csv") |> 
+  mutate(Age_cat=factor(Age_cat, levels=c("EOD", "LOD","VLOD", "older children (1-17yr)", "adults (>18yr)")))
+```
+# Supplementary Table 9. The distribution of resistance genes across CCs and overall. 
+```{r}
+# Table by CC of each resistance gene
+metadata_BCH |>
+  group_by(CC) |>
+  summarise(n=n(),
+            ant6Ia=sum(Antibiotic_Gene.ANT6IA),          
+            ant6Ia_p=paste("(", round(100*ant6Ia/n), "%)",sep=""),
+            aph3III=sum(Antibiotic_Gene.APH3III),          
+            aph3III_p=paste("(", round(100*aph3III/n), "%)",sep=""),
+            ant6IA =sum(Antibiotic_Gene.ANT6IA3KF864551),          
+            ant6IA_p=paste("(", round(100*ant6IA/n), "%)",sep=""),
+            tetM=sum(Antibiotic_Gene.TETM),          
+            tetM_p=paste("(", round(100*tetM/n), "%)",sep=""),
+            tetO=sum(Antibiotic_Gene.TETO),          
+            tetO_p=paste("(", round(100*tetO/n), "%)",sep=""),
+            ermA=sum(Antibiotic_Gene.ERMA),          
+            ermA_p=paste("(", round(100*ermA/n), "%)",sep=""),
+            ermB=sum(Antibiotic_Gene.ERMB),          
+            ermB_p=paste("(", round(100*ermB/n), "%)",sep=""),
+            ermT=sum(Antibiotic_Gene.ERMT),          
+            ermT_p=paste("(", round(100*ermT/n), "%)",sep=""),
+            mefA=sum(Antibiotic_Gene.MEFA),          
+            mefA_p=paste("(", round(100*mefA/n), "%)",sep=""),
+            msrD=sum(Antibiotic_Gene.MSRD),          
+            msrD_p=paste("(", round(100*msrD/n), "%)",sep=""))
+
+
+metadata_BCH |>
+  summarise(n=n(),
+            ant6Ia=sum(Antibiotic_Gene.ANT6IA),          
+            ant6Ia_p=paste("(", round(100*ant6Ia/n), "%)",sep=""),
+            aph3III=sum(Antibiotic_Gene.APH3III),          
+            aph3III_p=paste("(", round(100*aph3III/n), "%)",sep=""),
+            tetM=sum(Antibiotic_Gene.TETM),          
+            tetM_p=paste("(", round(100*tetM/n), "%)",sep=""),
+            tetO=sum(Antibiotic_Gene.TETO),          
+            tetO_p=paste("(", round(100*tetO/n), "%)",sep=""),
+            ermA=sum(Antibiotic_Gene.ERMA),          
+            ermA_p=paste("(", round(100*ermA/n), "%)",sep=""),
+            ermB=sum(Antibiotic_Gene.ERMB),          
+            ermB_p=paste("(", round(100*ermB/n), "%)",sep=""),
+            ermT=sum(Antibiotic_Gene.ERMT),          
+            ermT_p=paste("(", round(100*ermT/n), "%)",sep=""),
+            mefA=sum(Antibiotic_Gene.MEFA),          
+            mefA_p=paste("(", round(100*mefA/n), "%)",sep=""),
+            msrD=sum(Antibiotic_Gene.MSRD),          
+            msrD_p=paste("(", round(100*msrD/n), "%)",sep=""))
+```
+
+# Supplementary Table 10. The distribution of resistance phenotypes encoded by the resistance genes detected in the BCH isolates, across CCs and overall. 
+```{r}
+# Table by CC of each resistance genotype
+metadata_BCH |>
+  group_by(CC) |>
+  summarise(n=n(),
+            Aminoglycosides=sum(Antibiotic_Gene.ANT6IA+Antibiotic_Gene.APH3III!=0),          
+            Aminoglycosides_p=paste("(", round(100*Aminoglycosides/n), "%)",sep=""),
+            Tetracyclines=sum(Antibiotic_Gene.TETM+Antibiotic_Gene.TETO !=0),          
+            Tetracyclines_p=paste("(", round(100*Tetracyclines/n), "%)",sep=""),
+            MLSB=sum(Antibiotic_Gene.ERMA+Antibiotic_Gene.ERMB+Antibiotic_Gene.ERMT!=0),          
+            MLSB_p=paste("(", round(100*MLSB/n), "%)",sep=""),
+            M_type=sum(Antibiotic_Gene.MEFA+Antibiotic_Gene.MSRD!=0),          
+            M_type_p=paste("(", round(100*M_type/n), "%)",sep=""))
+
+
+metadata_BCH |>
+  summarise(n=n(),
+            Aminoglycosides=sum(Antibiotic_Gene.ANT6IA+Antibiotic_Gene.APH3III!=0),          
+            Aminoglycosides_p=paste("(", round(100*Aminoglycosides/n), "%)",sep=""),
+            Tetracyclines=sum(Antibiotic_Gene.TETM+Antibiotic_Gene.TETO !=0),          
+            Tetracyclines_p=paste("(", round(100*Tetracyclines/n), "%)",sep=""),
+            MLSB=sum(Antibiotic_Gene.ERMA+Antibiotic_Gene.ERMB+Antibiotic_Gene.ERMT!=0),          
+            MLSB_p=paste("(", round(100*MLSB/n), "%)",sep=""),
+            M_type=sum(Antibiotic_Gene.MEFA+Antibiotic_Gene.MSRD!=0),          
+            M_type_p=paste("(", round(100*M_type/n), "%)",sep=""))
+```
+
+# Supplementary Figure 3. Histogram of the number of GBS isolates per year, colored by whether they encoded the genes responsible for several resistance genotypes.
+```{r}
+# Plot of each resistance phenotype encoded by set of genes over the years
+t_ANT6IA <- metadata_BCH |>
+  group_by(Diagnosis_date, Antibiotic_Gene.ANT6IA) |>
+  summarise(n=n())|>
+  rename(R_gene= Antibiotic_Gene.ANT6IA)|>
+  mutate(R_to= "ANT6IA")
+
+t_APH3III <- metadata_BCH |>
+  group_by(Diagnosis_date, Antibiotic_Gene.APH3III) |>
+  summarise(n=n())|>
+  rename(R_gene= Antibiotic_Gene.APH3III)|>
+  mutate(R_to= "APH3III")
+
+t_TETM <- metadata_BCH |>
+  group_by(Diagnosis_date, Antibiotic_Gene.TETM) |>
+  summarise(n=n())|>
+  rename(R_gene= Antibiotic_Gene.TETM)|>
+  mutate(R_to= "TETM")
+
+t_TETO <- metadata_BCH |>
+  group_by(Diagnosis_date, Antibiotic_Gene.TETO) |>
+  summarise(n=n())|>
+  rename(R_gene= Antibiotic_Gene.TETO)|>
+  mutate(R_to= "TETO")
+
+t_ERMA <- metadata_BCH |>
+  group_by(Diagnosis_date, Antibiotic_Gene.ERMA) |>
+  summarise(n=n())|>
+  rename(R_gene= Antibiotic_Gene.ERMA)|>
+  mutate(R_to= "ERMA")
+
+t_ERMB <- metadata_BCH |>
+  group_by(Diagnosis_date, Antibiotic_Gene.ERMB) |>
+  summarise(n=n())|>
+  rename(R_gene= Antibiotic_Gene.ERMB)|>
+  mutate(R_to= "ERMB")
+
+t_ERMT <- metadata_BCH |>
+  group_by(Diagnosis_date, Antibiotic_Gene.ERMT) |>
+  summarise(n=n())|>
+  rename(R_gene= Antibiotic_Gene.ERMT)|>
+  mutate(R_to= "ERMT")
+
+t_MEFA <- metadata_BCH |>
+  group_by(Diagnosis_date, Antibiotic_Gene.MEFA) |>
+  summarise(n=n())|>
+  rename(R_gene= Antibiotic_Gene.MEFA)|>
+  mutate(R_to= "MEFA")
+
+t_MSRD <- metadata_BCH |>
+  group_by(Diagnosis_date, Antibiotic_Gene.MSRD) |>
+  summarise(n=n())|>
+  rename(R_gene= Antibiotic_Gene.MSRD)|>
+  mutate(R_to= "MSRD")
+
+t <- rbind(t_ANT6IA, t_APH3III, t_TETM, t_TETO, t_ERMA, t_ERMB, t_ERMT, t_MEFA, t_MSRD)|>
+  mutate(Diagnosis_date== factor(Diagnosis_date, levels=unique(metadata_BCH$Diagnosis_date)), 
+         R_gene= ifelse(R_gene==0, "no", "yes"))
+
+ggplot(data=t, aes(x=Diagnosis_date, y=n, fill=R_gene)) +
+  geom_bar(stat="identity") +
+  scale_fill_brewer(palette="Greens") + 
+  theme_minimal()+
+  facet_wrap(~R_to)+
+  labs(fill="Resistance Encoded")+
+  xlab("Diagnosis Date")+
+  ylab("Number of Isolates")+
+  ggtitle("Number of isolates encoding Resistance Genes over time")
+
+```
+
+
+# Supplementary Figure 4. Histogram of the number of GBS isolates per year, colored by whether they encoded given resistance genotypes. 
+```{r}
+# Plot of each resistance phenotype encoded by set of genes over the years
+
+AMR_by_year <- metadata_BCH  |>
+  mutate(Aminoglycosides=ifelse(Antibiotic_Gene.ANT6IA+Antibiotic_Gene.APH3III!=0, 1, 0),          
+         Tetracyclines=ifelse(Antibiotic_Gene.TETM+Antibiotic_Gene.TETO !=0, 1, 0),          
+         MLSB=ifelse(Antibiotic_Gene.ERMA+Antibiotic_Gene.ERMB+Antibiotic_Gene.ERMT!=0, 1, 0),          
+         M_type=ifelse(Antibiotic_Gene.MEFA+Antibiotic_Gene.MSRD!=0, 1, 0)) |>
+  dplyr::select(Sample, Diagnosis_date, Aminoglycosides, Tetracyclines, MLSB, M_type)
+
+
+t_Aminoglycosides <- AMR_by_year |>
+  group_by(Diagnosis_date, Aminoglycosides) |>
+  summarise(n=n())|>
+  rename(R_pheno= Aminoglycosides)|>
+  mutate(R_to= "Aminoglycosides")
+
+t_Tetracyclines <- AMR_by_year |>
+  group_by(Diagnosis_date, Tetracyclines) |>
+  summarise(n=n())|>
+  rename(R_pheno= Tetracyclines)|>
+  mutate(R_to= "Tetracyclines")
+
+t_MLSB <- AMR_by_year |>
+  group_by(Diagnosis_date, MLSB) |>
+  summarise(n=n())|>
+  rename(R_pheno= MLSB)|>
+  mutate(R_to= "MLSB")
+
+t_M_type <- AMR_by_year |>
+  group_by(Diagnosis_date, M_type) |>
+  summarise(n=n())|>
+  rename(R_pheno= M_type)|>
+  mutate(R_to= "M_type")
+
+t <- rbind(t_Aminoglycosides, t_Tetracyclines, t_MLSB, t_M_type)|>
+  mutate(Diagnosis_date== factor(Diagnosis_date, levels=unique(AMR_by_year$Diagnosis_date)), 
+         R_pheno= ifelse(R_pheno==0, "no", "yes"))
+
+ggplot(data=t, aes(x=Diagnosis_date, y=n, fill=R_pheno)) +
+  geom_bar(stat="identity") +
+  scale_fill_brewer(palette="Greens") + 
+  theme_minimal()+
+  facet_wrap(~R_to)+
+  labs(fill="Resistance Encoded")+
+  xlab("Diagnosis Date")+
+  ylab("Number of Isolates")+
+  ggtitle("Number of isolates encoding Resistance Genotypes over time")
+```
+
+# Supplementary Table 7. Overlap of phenotypic and genotypic erythromycin resistance.
+```{r}
+metadata_BCH <- metadata_BCH|>
+  mutate(Genotypic_Resistance.M_type=ifelse(Antibiotic_Gene.MEFA+Antibiotic_Gene.MSRD!=0, 1, 0), Genotypic_Resistance.Erythromycin=ifelse(Antibiotic_Gene.ERMA+Antibiotic_Gene.ERMB+Antibiotic_Gene.ERMT+Antibiotic_Gene.MEFA+Antibiotic_Gene.MSRD!=0, 1, 0))
+
+table(metadata_BCH$Phenotypic_Resistance.Erythromycin)
+
+table(metadata_BCH$Phenotypic_Resistance.Erythromycin, metadata_BCH$Antibiotic_Gene.ERMA)
+table(metadata_BCH$Phenotypic_Resistance.Erythromycin, metadata_BCH$Antibiotic_Gene.ERMB)
+table(metadata_BCH$Phenotypic_Resistance.Erythromycin, metadata_BCH$Antibiotic_Gene.ERMT)
+
+table(metadata_BCH$Phenotypic_Resistance.Erythromycin, metadata_BCH$Genotypic_Resistance.M_type)
+
+table(metadata_BCH$Phenotypic_Resistance.Erythromycin, metadata_BCH$Genotypic_Resistance.Erythromycin)
+
+```
+
+# Supplementary Table 8. Overlap of phenotypic and genotypic clindamycin resistance.
+```{r}
+metadata_BCH <- metadata_BCH|>
+  mutate(Genotypic_Resistance.Clindamycin=ifelse(Antibiotic_Gene.ERMA+Antibiotic_Gene.ERMB+Antibiotic_Gene.ERMT!=0, 1, 0))
+
+table(metadata_BCH$Phenotypic_Resistance.Clindamycin)
+
+table(metadata_BCH$Phenotypic_Resistance.Clindamycin, metadata_BCH$Antibiotic_Gene.ERMA)
+table(metadata_BCH$Phenotypic_Resistance.Clindamycin, metadata_BCH$Antibiotic_Gene.ERMB)
+table(metadata_BCH$Phenotypic_Resistance.Clindamycin, metadata_BCH$Antibiotic_Gene.ERMT)
+
+table(metadata_BCH$Phenotypic_Resistance.Clindamycin, metadata_BCH$Genotypic_Resistance.Clindamycin)
+
+```
+

@@ -1,0 +1,143 @@
+---
+title: "Make Master Data"
+output: html_document
+date: "2024-10-16"
+---
+
+# Clean Clinical Metadata
+```{r}
+# Clean environment
+rm( list = ls() )
+
+# load libraries
+library(xlsx)
+library(tidyverse)
+
+# load data
+setwd("~/GitHub/BCH-GBS/0.Raw_Data")
+metadata <- read.xlsx("GBS_mastersheet_LC.xlsx", sheetIndex = 1)
+
+
+# CLEAN DATA
+# Keep only columns of interest
+metadata_clinical <- metadata |> 
+select(ID, Source, Same_patient, Date.of.cx, DOB, Admitted.to, Penicillin, Vancomycin, Erhthromycin, Clindamycin, WBC, Hb, platelet, ANC, ALC)|> 
+  rename("Erythromycin"="Erhthromycin", "isolated_from"= "Source", "Admission_loc"="Admitted.to")|>
+  mutate(Date.of.cx= as.Date(Date.of.cx, "%d%b%Y"))|>
+  mutate(days_at_dx= as.numeric(Date.of.cx - DOB))|>
+  mutate(ID_number= as.numeric(sub("_.*", "", ID)))|>
+  mutate(Hb= as.numeric(Hb), 
+         WBC= as.numeric(WBC), 
+         platelet= as.numeric(platelet), 
+         ANC= as.numeric(ANC), 
+         ALC= as.numeric(ALC))|>
+  mutate(Clindamycin = ifelse(Clindamycin=="I", "i", Clindamycin))
+  
+
+# Remove patient duplicates
+metadata_clinical_unique <- metadata_clinical |> 
+  filter(Same_patient == "No")
+
+metadata_clinical_Same <- metadata_clinical |> 
+  filter(Same_patient == "Yes")|> 
+  filter(ID %in% c("41_S41", "48_S48", "59_S59", "67_S67", "70_S70", "73_S73", "77_S77", "92_S92", "95_S95"))|>
+  mutate(isolated_from="blood; csf")
+
+metadata_clinical_V2 <- rbind(metadata_clinical_unique, metadata_clinical_Same)|>
+  select(-Same_patient)
+
+
+# Clean 
+metadata_clinical_V3 <- metadata_clinical_V2 |> 
+  mutate(isolated_from = ifelse(isolated_from %in% c("Bld CVL", "Bld Ven", "blood", "Blood"), "blood", 
+                         ifelse(isolated_from %in% c("csf", "CSF"), "csf", isolated_from)))|> 
+  mutate(Admission_loc = ifelse(grepl("ICU", Admission_loc), "ICU", "other"))
+
+# Add Age Group
+metadata_clinical_V4 <- metadata_clinical_V3|>
+  mutate(days_at_dx = ifelse(ID_number==74, 8321, days_at_dx))|>
+  mutate(Age_cat = ifelse(days_at_dx<7, "EOD", 
+                               ifelse(days_at_dx<= 89, "LOD", 
+                               ifelse(days_at_dx<= 365, "VLOD", 
+                               ifelse(days_at_dx<= (365*18) , "Older Children (1-18 years)", "Adults")))))|>
+  mutate(infant= ifelse(days_at_dx <=365, 1, 0))
+
+# Add laboratory and clinical diagnostics
+metadata_clinical_V5 <- metadata_clinical_V4|>  
+  mutate(Neutropenia= ifelse(as.numeric(ANC)*1000 < 1500, 1, 0), 
+         Leukocytosis= ifelse(as.numeric(ALC) *1000 > 10500, 1, 0), 
+         Leukopenia= ifelse(as.numeric(ALC)*1000 < 3500, 1, 0))|>
+  mutate(Meningitis= ifelse(isolated_from == "blood", 0, 1))
+```
+# Add Genomic data 
+```{r}
+# load data
+setwd("~/GitHub/BCH-GBS/1. Bioinformatic_Analysis/Outputs")
+## Surface proteins
+Surface_protein_df <- read.delim("BCH_GBS_surface_protein.txt") |> 
+  mutate(Sample_id = as.numeric(str_split(Sample_id, "_", simplify = T)[,1])) |> 
+  rename("ID_number"="Sample_id")
+colnames(Surface_protein_df)[-1] <- paste0("Surface_protein.", colnames(Surface_protein_df)[-1])
+## Resistance Genes
+Res_Genes_df <- read.delim("BCH_GBS_Resistance_Genes.txt")|> 
+  mutate(Sample_id = as.numeric(str_split(Sample_id, "_", simplify = T)[,1])) |> 
+  rename("ID_number"="Sample_id")|> 
+  select(where(~ !all(. == "neg")), !ANT6IA3KF864551, TETO32O )
+colnames(Res_Genes_df)[-c(1,2)] <- paste0("Res_Gene.", colnames(Res_Genes_df)[-c(1,2)])
+## Resistance Mutations
+Res_MUTs_df <- read.delim("BCH_GBS_Resistance_MUTS.txt") |> 
+  mutate(Sample_id = as.numeric(str_split(Sample_id, "_", simplify = T)[,1])) |> 
+  rename("ID_number"="Sample_id")
+colnames(Res_MUTs_df)[-1] <- paste0("Res_MUT.", colnames(Res_MUTs_df)[-1])
+## Serotype
+Serotype_df <- read.delim("BCH_GBS_serotype.txt") |> 
+  mutate(Sample = parse_number(str_remove(Sample, "_trimmed")), 
+         GBS.SBG = str_remove(GBS.SBG, "GBS-SBG:")) |> 
+  rename("ID_number"="Sample", "serotype"="GBS.SBG")  
+## ST
+mlst_df <- read.delim("BCH_GBS_mlst.txt") |> 
+  mutate(Sample = parse_number(str_remove(Sample, "_trimmed"))) |> 
+  rename("ID_number"="Sample")
+colnames(mlst_df)[3:ncol(mlst_df)] <- paste("ST_info.",colnames(mlst_df)[3:ncol(mlst_df)], sep="")
+## CC
+CC_df <- read.delim("BCH_GBS_CC.txt", sep=",") |> 
+  mutate(Sample = parse_number(str_remove(Sample, "_trimmed")), 
+         clonal_complex = parse_number(clonal_complex)) |> 
+  rename("ID_number"="Sample", "CC"="clonal_complex")
+## Virulence Genes
+Virulence_genes_df <- read.delim("summary_vfdb_filtered.tab") |> 
+  mutate(X.FILE = parse_number(str_split(str_split(X.FILE, "/", simplify = T)[,9], "_", simplify = T)[,1]))|> 
+  rename("ID_number"="X.FILE", "cfa_cfb" ="cfa.cfb")|>
+  select(ID_number, lmb, scpB, hylB, fbsB)|> 
+  mutate(across(-ID_number, ~ ifelse(. == ".", 0, 1)))
+colnames(Virulence_genes_df)[-1] <- paste0("Virulence_Gene.", colnames(Virulence_genes_df)[-1])
+## SIP gene
+SIP_gene_df <- read.delim("summary_sip_gene.tab") |> 
+  mutate(X.FILE = parse_number(str_split(str_split(X.FILE, "/", simplify = T)[,9], "_", simplify = T)[,1]))|> 
+  rename("ID_number"="X.FILE")|>
+  select(-NUM_FOUND)|> 
+  mutate(across(-ID_number, ~ ifelse(. == ".", 0, 1)))|> 
+  mutate(Sip = Sip.1a + Sip.3a)
+colnames(SIP_gene_df)[-1] <- paste0("Surface_protein.", colnames(SIP_gene_df)[-1])
+
+# Join to metadata
+meta_Genomic_data <- left_join(left_join(left_join(left_join(left_join(left_join(left_join(metadata_clinical_V5, Surface_protein_df), 
+          Res_Genes_df), 
+          Res_MUTs_df),
+          mlst_df), 
+          CC_df), 
+          Virulence_genes_df), 
+          SIP_gene_df)|> 
+  mutate(across(c(colnames(Surface_protein_df)[-1], colnames(Res_Genes_df)[-c(1,2)]), ~ ifelse(.=="neg", 0, 1)))|> 
+  mutate(across(colnames(Res_MUTs_df)[-1], ~ ifelse(.=="*", "0", Res_MUTs_df)))|> 
+  mutate(CC= ifelse(ID =="11_S11", 23,CC))|> 
+  mutate(CC= ifelse(ID =="47_S47", 19,CC))|> 
+  mutate(CC= ifelse(ID =="8_S8", 17,CC))
+
+```
+# Save 
+```{r}
+setwd("~/GitHub/BCH-GBS/2.Statistical_Analysis")
+write.xlsx(meta_Genomic_data, "Clinical_Genomic_data.xlsx")
+```
+
