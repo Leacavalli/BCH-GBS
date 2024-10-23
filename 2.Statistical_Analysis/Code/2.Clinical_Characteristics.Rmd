@@ -1,0 +1,322 @@
+---
+title: "Clinical Characteristics"
+output: html_document
+date: "2024-10-22"
+---
+
+# Prepare environment & Load Data
+```{r}
+# Clean environment
+rm( list = ls() )
+
+# load libraries
+library(xlsx)
+library(tidyverse)
+library(khroma)
+library(colorBlindness)
+library(ggplot2)
+
+# load data
+setwd("~/GitHub/BCH-GBS/2.Statistical_Analysis/Data")
+data <- read.xlsx("Clinical_Genomic_data.xlsx", sheetIndex = 1) 
+# Remove contaminated samples
+data_clean <- data|>
+  filter(! ID %in% c("1_S1","32_S32","35_S35","81_S81"))|> 
+  mutate(ICU = ifelse(Admission_loc=="ICU", 1,0))
+
+# Subset to infants alone 
+data_clean_infants <- data_clean |> filter(days_at_dx <= 365)
+```
+
+# Clinical Characteristics
+## Table 1
+```{r}
+# infants vs older individuals
+
+## P-values
+p_val_Hb <- round(wilcox.test(Hb ~ infant, data = data_clean)$p.value, 3)
+p_val_WBC <- round(wilcox.test(WBC ~ infant, data = data_clean)$p.value, 3)
+p_val_Leukocytosis <- round(coef(summary(glm(Leukocytosis ~ infant, data_clean, family = binomial)))[2,4], 3)
+p_val_Leukopenia <- round(coef(summary(glm(Leukopenia ~ infant, data_clean, family = binomial)))[2,4], 3)
+p_val_platelet <- round(wilcox.test(platelet ~ infant, data = data_clean)$p.value, 3)
+p_val_ANC <- round(wilcox.test(ANC ~ infant, data = data_clean)$p.value, 3)
+p_val_Neutropenia <- round(coef(summary(glm(Neutropenia ~ infant, data_clean, family = binomial)))[2,4], 3)
+## Table
+Table1_1 <- data_clean |> 
+  group_by(infant)|>
+  summarise(N=n(), 
+            Hb_mean_SD= paste(round(mean(Hb, na.rm=T),2), " (", round(sd(Hb, na.rm=T), 2),")", sep=""), 
+            WBC_mean_SD= paste(round(mean(WBC, na.rm=T),2), " (", round(sd(WBC, na.rm=T),2),")", sep=""), 
+            Leukocytosis_Yes_p = paste(sum(Leukocytosis==1, na.rm = T), " (", round(100*mean(Leukocytosis==1, na.rm = T), 1),")", sep=""), 
+            Leukopenia_Yes_p  = paste(sum(Leukopenia==1, na.rm = T), " (", round(100*mean(Leukopenia==1, na.rm = T), 1),")", sep=""), 
+            Platelet_mean_SD= paste(round(mean(platelet, na.rm=T),2), " (",  round(sd(platelet, na.rm=T),2),")", sep=""), 
+            ANC_mean_SD= paste(round(mean(ANC, na.rm=T),2), " (",  round(sd(ANC, na.rm=T),2),")", sep=""), 
+            Neutropenia_Yes_p = paste(sum(Neutropenia==1, na.rm = T), " (",  round(100*mean(Neutropenia==1, na.rm = T),1),")", sep="")) |>
+  mutate(Value= paste0(infant, "(N=", N, ")"), .before =Hb_mean_SD)|>
+  select(-infant, -N)
+Table1_1 <- rbind(Table1_1, c("p-value", p_val_Hb, p_val_WBC, p_val_Leukocytosis, p_val_Leukopenia, p_val_platelet, p_val_ANC,p_val_Neutropenia))
+
+# ICU vs other  
+# Function to calculate Odds Ratio and 95% CI
+calculate_or_ci <- function(model) {
+  coef_logit <- coef(model)[2]
+  se_logit <- coef(summary(model))[2, "Std. Error"]
+  lower_ci <- coef_logit - 1.96 * se_logit
+  upper_ci <- coef_logit + 1.96 * se_logit
+  
+  odds_ratio <- exp(coef_logit)
+  lower_or <- exp(lower_ci)
+  upper_or <- exp(upper_ci)
+  
+  or_ci <- paste0(round(odds_ratio, 2), " (", round(lower_or, 2), "-", round(upper_or, 2), ")")
+  return(or_ci)
+}
+# Logistic regression models
+model_Hb <- glm(ICU ~ Hb,data_clean_infants, family = binomial)
+model_WBC <- glm(ICU ~ WBC,data_clean_infants, family = binomial)
+model_Leukocytosis <- glm(ICU ~ Leukocytosis,data_clean_infants, family = binomial)
+model_Leukopenia <- glm(ICU ~ Leukopenia,data_clean_infants, family = binomial)
+model_platelet <- glm(ICU ~ platelet,data_clean_infants, family = binomial)
+model_ANC <- glm(ICU ~ ANC,data_clean_infants, family = binomial)
+model_Neutropenia <- glm(ICU ~ Neutropenia,data_clean_infants, family = binomial)
+# Calculate OR and 95% CI for each factor
+or_Hb <- calculate_or_ci(model_Hb)
+or_WBC <- calculate_or_ci(model_WBC)
+or_Leukocytosis <- calculate_or_ci(model_Leukocytosis)
+or_Leukopenia <- calculate_or_ci(model_Leukopenia)
+or_platelet <- calculate_or_ci(model_platelet)
+or_ANC <- calculate_or_ci(model_ANC)
+or_Neutropenia <- calculate_or_ci(model_Neutropenia)
+# Create a p-value vector from the models
+p_val_Hb <- round(coef(summary(model_Hb))[2,4], 3)
+p_val_WBC <- round(coef(summary(model_WBC))[2,4], 3)
+p_val_Leukocytosis <- round(coef(summary(model_Leukocytosis))[2,4], 3)
+p_val_Leukopenia <- round(coef(summary(model_Leukopenia))[2,4], 3)
+p_val_platelet <- round(coef(summary(model_platelet))[2,4], 3)
+p_val_ANC <- round(coef(summary(model_ANC))[2,4], 3)
+p_val_Neutropenia <- round(coef(summary(model_Neutropenia))[2,4], 3)
+# Create the summary table
+Table1_2 <- data_clean |>
+  mutate(Admission_loc = factor(Admission_loc, levels = c("other", "ICU"))) |>
+  filter(days_at_dx <= 365) |>
+  group_by(Admission_loc) |>
+  summarise(
+    N = n(),
+    Hb_mean_SD = paste(round(mean(Hb, na.rm = TRUE), 2), " (", round(sd(Hb, na.rm = TRUE), 2), ")", sep = ""),
+    WBC_mean_SD = paste(round(mean(WBC, na.rm = TRUE), 2), " (", round(sd(WBC, na.rm = TRUE), 2), ")", sep = ""),
+    Leukocytosis_Yes_p = paste(sum(Leukocytosis == 1, na.rm = TRUE), " (", round(100 * mean(Leukocytosis == 1, na.rm = TRUE), 1), ")", sep = ""),
+    Leukopenia_Yes_p = paste(sum(Leukopenia == 1, na.rm = TRUE), " (", round(100 * mean(Leukopenia == 1, na.rm = TRUE), 1), ")", sep = ""),
+    Platelet_mean_SD = paste(round(mean(platelet, na.rm = TRUE), 2), " (", round(sd(platelet, na.rm = TRUE), 2), ")", sep = ""),
+    ANC_mean_SD = paste(round(mean(ANC, na.rm = TRUE), 2), " (", round(sd(ANC, na.rm = TRUE), 2), ")", sep = ""),
+    Neutropenia_Yes_p = paste(sum(Neutropenia == 1, na.rm = TRUE), " (", round(100 * mean(Neutropenia == 1, na.rm = TRUE), 1), ")", sep = "")
+  ) |>
+  mutate(Value = paste0(Admission_loc, "(N=", N, ")"), .before = Hb_mean_SD) |>
+  select(-Admission_loc, -N)
+# Add OR row directly during table creation
+or_row <- c("OR (95% CI)", or_Hb, or_WBC, or_Leukocytosis, or_Leukopenia, or_platelet, or_ANC, or_Neutropenia)
+# Add p-value row
+pval_row <- c("p-value", p_val_Hb, p_val_WBC, p_val_Leukocytosis, p_val_Leukopenia, p_val_platelet, p_val_ANC, p_val_Neutropenia)
+# Bind both rows to the table
+Table1_2 <- rbind(Table1_2, or_row, pval_row)
+# View the final table
+Table1_2
+
+# ICU vs other  
+## P-values
+p_val_3_Hb <- round(wilcox.test(Hb ~ Meningitis, data = data_clean|> filter(days_at_dx <= 365))$p.value, 3)
+p_val_3_WBC <- round(wilcox.test(WBC ~ Meningitis, data = data_clean|> filter(days_at_dx <= 365))$p.value, 3)
+p_val_3_Leukocytosis <- round(coef(summary(glm(Leukocytosis ~ Meningitis, data_clean|> filter(days_at_dx <= 365), family = binomial)))[2,4], 3)
+p_val_3_Leukopenia <- round(coef(summary(glm(Leukopenia ~ Meningitis, data_clean|> filter(days_at_dx <= 365), family = binomial)))[2,4], 3)
+p_val_3_platelet <- round(wilcox.test(platelet ~ Meningitis, data = data_clean|> filter(days_at_dx <= 365))$p.value, 3)
+p_val_3_ANC <- round(wilcox.test(ANC ~ Meningitis, data = data_clean|> filter(days_at_dx <= 365))$p.value, 3)
+p_val_3_Neutropenia <- round(coef(summary(glm(Neutropenia ~ Meningitis, data_clean|> filter(days_at_dx <= 365), family = binomial)))[2,4], 3)
+## Table
+Table1_3 <- data_clean |> 
+  filter(days_at_dx <= 365)|>
+  group_by(Meningitis)|>
+  summarise(N=n(), 
+            Hb_mean_SD= paste(round(mean(Hb, na.rm=T),2), " (", round(sd(Hb, na.rm=T), 2),")", sep=""), 
+            WBC_mean_SD= paste(round(mean(WBC, na.rm=T),2), " (", round(sd(WBC, na.rm=T),2),")", sep=""), 
+            Leukocytosis_Yes_p = paste(sum(Leukocytosis==1, na.rm = T), " (", round(100*mean(Leukocytosis==1, na.rm = T), 1),")", sep=""), 
+            Leukopenia_Yes_p  = paste(sum(Leukopenia==1, na.rm = T), " (", round(100*mean(Leukopenia==1, na.rm = T), 1),")", sep=""), 
+            Platelet_mean_SD= paste(round(mean(platelet, na.rm=T),2), " (",  round(sd(platelet, na.rm=T),2),")", sep=""), 
+            ANC_mean_SD= paste(round(mean(ANC, na.rm=T),2), " (",  round(sd(ANC, na.rm=T),2),")", sep=""), 
+            Neutropenia_Yes_p = paste(sum(Neutropenia==1, na.rm = T), " (",  round(100*mean(Neutropenia==1, na.rm = T),1),")", sep="")) |>
+  mutate(Value= paste0(Meningitis, "(N=", N, ")"), .before =Hb_mean_SD)|>
+  select(-Meningitis, -N)
+Table1_3 <- rbind(Table1_3, c("p-value", p_val_3_Hb, p_val_3_WBC, p_val_3_Leukocytosis, p_val_3_Leukopenia, p_val_3_platelet, p_val_3_ANC,p_val_3_Neutropenia))
+  
+rbind(Table1_1, Table1_2, Table1_3)
+```
+
+# Identifying correlates of severe clinical outcomes
+# Function
+```{r}
+# Generalized function to calculate OR and adjusted OR controlling for CC
+calculate_or <- function(df, risk_factor, outcome) {
+  
+  # Ensure that risk_factor is treated as a column from the dataframe
+  risk_factor_col <- df[[risk_factor]]
+  
+  # Create a 2x2 table of the outcome vs. Other by the risk factor
+  outcome_cases <- sum(df |> filter(df[[outcome]] == 1) |> pull(risk_factor))
+  other_cases <- sum(df |> filter(df[[outcome]] == 0) |> pull(risk_factor)) 
+  
+  # Logistic regression without controlling for CC (unadjusted OR)
+  log_reg <- glm(as.formula(paste(outcome, "~", risk_factor)), data = df, family = binomial)
+  log_reg_summary <- coef(summary(log_reg))
+  
+  # Extract Odds Ratio (exponentiate the coefficient) and Confidence Intervals for unadjusted OR
+  or_value <- exp(log_reg_summary[2, 1])
+  ci_lower <- exp(log_reg_summary[2, 1] - 1.96 * log_reg_summary[2, 2])
+  ci_upper <- exp(log_reg_summary[2, 1] + 1.96 * log_reg_summary[2, 2])
+  p_value <- round(log_reg_summary[2, 4], 3)
+  
+  # Logistic regression controlling for CC (adjusted OR)
+  log_reg_adj <- glm(as.formula(paste(outcome, "~", risk_factor, "+ CC")), data = df, family = binomial)
+  log_reg_adj_summary <- coef(summary(log_reg_adj))
+  
+  # Extract Odds Ratio (exponentiate the coefficient) and Confidence Intervals for adjusted OR
+  adj_or_value <- exp(log_reg_adj_summary[2, 1])
+  adj_ci_lower <- exp(log_reg_adj_summary[2, 1] - 1.96 * log_reg_adj_summary[2, 2])
+  adj_ci_upper <- exp(log_reg_adj_summary[2, 1] + 1.96 * log_reg_adj_summary[2, 2])
+  adj_p_value <- round(log_reg_adj_summary[2, 4], 3)
+  
+  # Return a dataframe with both OR and adjusted OR
+  data.frame(
+    Risk_Factor = risk_factor,
+    outcome_yes = outcome_cases,
+    outcome_No = other_cases,
+    Crude_Or = sprintf("%.2f (%.2f - %.2f)", or_value, ci_lower, ci_upper),
+    P_value = p_value,
+    Adjusted_Or = sprintf("%.2f (%.2f - %.2f)", adj_or_value, adj_ci_lower, adj_ci_upper),
+    Adjusted_Pvalue = adj_p_value
+  )
+}
+
+# List of risk factors (genes) to test
+risk_factors <- c("Surface_protein.ALP1", 
+                  "Surface_protein.ALP23",
+                  "Surface_protein.ALPHA",
+                  "Surface_protein.RIB",
+                  "Surface_protein.PI1" ,
+                  "Surface_protein.PI2A1" ,
+                  "Surface_protein.PI2A2",
+                    "Surface_protein.PI2B",
+                      "Surface_protein.SRR1",
+                     "Surface_protein.SRR2",
+                     "Surface_protein.Sip.1a",
+                  "Surface_protein.Sip.3a",
+                  "Surface_protein.HVGA",
+                  "Virulence_Gene.lmb",
+                  "Virulence_Gene.scpB",
+                  "Virulence_Gene.hylB",
+                  "Virulence_Gene.fbsB" )
+
+
+```
+
+# TABLE 2   
+# Outcome : ICU
+```{r}
+# Calculate OR, CI, and P-value for each gene, and adjust for CC
+results <- lapply(risk_factors, calculate_or, df = data_clean_infants, outcome = "ICU")
+
+# Combine the results into a single dataframe
+final_table_ICU <- bind_rows(results) |> 
+  mutate(Risk_Factor = str_remove(str_remove(Risk_Factor, "Surface_protein."), "Virulence_Gene."))|>
+  mutate(sig = ifelse(Adjusted_Pvalue < round(0.05/length(risk_factors), 3), "yes", "no"))
+
+# Rename columns for clarity
+colnames(final_table_ICU) <- c("Risk_Factor", "ICU (n=31)","Other (n=39)","Crude OR (95% CI)", "P-value", "Adjusted OR (95% CI)","Adjusted P-value", "Significant")
+
+final_table_ICU
+```
+# Outcome : Meningitis
+```{r}
+# Calculate OR, CI, and P-value for each gene, and adjust for CC
+results <- lapply(risk_factors, calculate_or, df = data_clean_infants, outcome = "Meningitis")
+
+# Combine the results into a single dataframe
+final_table_Meningitis <- bind_rows(results) |> 
+  mutate(Risk_Factor = str_remove(str_remove(Risk_Factor, "Surface_protein."), "Virulence_Gene."))|>
+  mutate(sig = ifelse(Adjusted_Pvalue< round(0.05/length(risk_factors), 3), "yes", "no"))
+
+# Rename columns for clarity
+colnames(final_table_Meningitis) <- c("Risk_Factor", "Meningitis (n=13)","No Meningitis (n=57)","Crude OR (95% CI)", "P-value", "Adjusted OR (95% CI)","Adjusted P-value", "Significant")
+
+final_table_Meningitis
+```
+
+# Outcome : Age of onset 
+## LOD vs VLOD among infants
+```{r}
+# Subset data
+data_LOD <- data_clean_infants |> filter(Age_cat != "EOD") |> mutate(LOD= ifelse(Age_cat == "LOD", 1, 0))
+
+# Calculate OR, CI, and P-value for each gene, and adjust for CC
+results <- lapply(risk_factors, calculate_or, df = data_LOD, outcome = "LOD")
+
+# Combine the results into a single dataframe
+final_table_LOD <- bind_rows(results) |> 
+  mutate(Risk_Factor = str_remove(str_remove(Risk_Factor, "Surface_protein."), "Virulence_Gene."))|>
+  mutate(sig = ifelse(Adjusted_Pvalue< round(0.05/length(risk_factors), 3), "yes", "no"))
+
+# Rename columns for clarity
+colnames(final_table_LOD) <- c("Risk_Factor", "LOD (n=48)","VLOD (n=20)","Crude OR (95% CI)", "P-value", "Adjusted OR (95% CI)","Adjusted P-value", "Significant")
+
+final_table_LOD
+```
+## infant vs older individuals
+```{r}
+# Calculate OR, CI, and P-value for each gene, and adjust for CC
+results <- lapply(risk_factors, calculate_or, df = data_clean, outcome = "infant")
+
+# Combine the results into a single dataframe
+final_table_infant <- bind_rows(results) |> 
+  mutate(Risk_Factor = str_remove(str_remove(Risk_Factor, "Surface_protein."), "Virulence_Gene."))|>
+  mutate(sig = ifelse(Adjusted_Pvalue< round(0.05/length(risk_factors), 3), "yes", "no"))
+
+
+# Rename columns for clarity
+colnames(final_table_infant) <- c("Risk_Factor", "Infant (n=70)","Older (n=17)","Crude OR (95% CI)", "P-value", "Adjusted OR (95% CI)","Adjusted P-value", "Significant")
+
+final_table_infant
+```
+
+## Neutropenia
+```{r}
+# Calculate OR, CI, and P-value for each gene, and adjust for CC
+results <- lapply(risk_factors, calculate_or, df = data_clean_infants, outcome = "Neutropenia")
+
+# Combine the results into a single dataframe
+final_table_Neutropenia <- bind_rows(results) |> 
+  mutate(Risk_Factor = str_remove(str_remove(Risk_Factor, "Surface_protein."), "Virulence_Gene."))|>
+  mutate(sig = ifelse(Adjusted_Pvalue< round(0.05/length(risk_factors), 3), "yes", "no"))
+
+# Rename columns for clarity
+colnames(final_table_Neutropenia) <- c("Risk_Factor", "Neutropenia (n=17)","No Neutropenia (n=51)","Crude OR (95% CI)", "P-value", "Adjusted OR (95% CI)","Adjusted P-value", "Significant")
+
+final_table_Neutropenia
+```
+
+## Leukopenia
+```{r}
+# Calculate OR, CI, and P-value for each gene, and adjust for CC
+results <- lapply(risk_factors, calculate_or, df = data_clean_infants, outcome = "Leukopenia")
+
+# Combine the results into a single dataframe
+final_table_Leukopenia <- bind_rows(results) |> 
+  mutate(Risk_Factor = str_remove(str_remove(Risk_Factor, "Surface_protein."), "Virulence_Gene."))|>
+  mutate(sig = ifelse(Adjusted_Pvalue< round(0.05/length(risk_factors), 3), "yes", "no"))
+
+# Rename columns for clarity
+colnames(final_table_Leukopenia) <- c("Risk_Factor", "Leukopenia (n=51)","No Leukopenia (n=17)","Crude OR (95% CI)", "P-value", "Adjusted OR (95% CI)","Adjusted P-value", "Significant")
+
+final_table_Leukopenia
+```
+
+## Leukocytosis
+```{r}
+# Not done because Leukocytosis (n=67 ) and No Leukocytosis (n=1)
+```

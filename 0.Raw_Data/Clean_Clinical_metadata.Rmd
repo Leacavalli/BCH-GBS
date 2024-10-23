@@ -64,9 +64,9 @@ metadata_clinical_V4 <- metadata_clinical_V3|>
 
 # Add laboratory and clinical diagnostics
 metadata_clinical_V5 <- metadata_clinical_V4|>  
-  mutate(Neutropenia= ifelse(as.numeric(ANC)*1000 < 1500, 1, 0), 
-         Leukocytosis= ifelse(as.numeric(ALC) *1000 > 10500, 1, 0), 
-         Leukopenia= ifelse(as.numeric(ALC)*1000 < 3500, 1, 0))|>
+  mutate(Neutropenia= ifelse(as.numeric(ANC)*1000 < 1500, 1, 0),
+         Leukocytosis= ifelse(as.numeric(WBC) *1000 > 10500, 1, 0), 
+         Leukopenia= ifelse(as.numeric(WBC)*1000 < 3500, 1, 0))|>
   mutate(Meningitis= ifelse(isolated_from == "blood", 0, 1))
 ```
 # Add Genomic data 
@@ -135,8 +135,8 @@ meta_Genomic_data <- left_join(left_join(left_join(left_join(left_join(left_join
   mutate(Res_MUT.PARC_SNP = ifelse(Res_MUT.PARC_SNP=="*", "0", Res_MUT.PARC_SNP))|> 
   mutate(CC= ifelse(ID_number  ==11, 23,CC))|> 
   mutate(CC= ifelse(ID_number  ==47, 19,CC))|> 
-  mutate(CC= ifelse(ID_number  ==8, 17,CC))
-
+  mutate(CC= ifelse(ID_number  ==8, 17,CC))|> 
+  mutate(CC= ifelse(ID_number  ==64, 12,CC))
 ```
 # Save 
 ```{r}

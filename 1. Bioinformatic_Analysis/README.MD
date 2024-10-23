@@ -46,12 +46,12 @@ done
 ### 2.2. Summarise
 ```
 echo -e "Sample\tPercent GBS Reads" > KRAKEN_contaminated.txt
-for i in ../1.TRIMMED_READS/*trimmed*.fq.gz
+for i in *_report.txt
 do
-  base=$(echo $i | cut -d '/' -f3-3 | cut -d '_' -f1-1)
-  percent=$(grep 'Streptococcus agalactiae' $base\_report.txt | head -1 | awk '{print $1}')
-  echo -e $base'\t'$percent
+  percent=$(grep 'Streptococcus agalactiae' $i | head -1 | awk '{print $1}')
+  echo -e $i'\t'$percent
 done  >> KRAKEN_contaminated.txt
+sort -k2,2n KRAKEN_contaminated.txt > sorted_KRAKEN_contaminated.txt
 ```
 # 2. Run FASTQC on trimmed reads
 ### 2.1. Install Software and dependencies
@@ -303,7 +303,7 @@ mkdir 9.ASSIGN_CC
 
 # Append all results from mlst to a single file
 awk '(NR == 1) || (FNR > 1)' 3.SEROTYPE_MLST/*__mlst__Streptococcus_agalactiae__results.txt > 3.SEROTYPE_MLST/combined_results.txt
-cut -f1,2 3.SEROTYPE_MLST/combined_results.txt  | tail -n +2  | sed 's/\t/,/g' | sort -t',' -k2,2 | sed 's/\*//g' > 9.ASSIGN_CC/STs.txt
+cut -f1,2 3.SEROTYPE_MLST/combined_results.txt  | tail -n +2  | sed 's/\t/,/g' | sort -t',' -k2,2 | sed 's/\*//g' | sed 's/\?//g'  > 9.ASSIGN_CC/STs.txt
 
 # Define the file paths
 cut -d',' -f1,9 Files/GBS_CC_profiles.csv | tail -n +2  | sort -t',' -k1,1 > 9.ASSIGN_CC/GBS_ST_CC_ref.txt
@@ -359,8 +359,8 @@ standard-RAxML-master/raxmlHPC-PTHREADS-SSE3 -h
 ```
 ### 12.2. Summarise results
 ```
-mkdir 12.RAxML
-cd 12.RAxML
+mkdir 11.RAxML
+cd 11.RAxML
 # Generate 100 ML trees on distinct starting trees and output the best likelihood tree
 sbatch -p test -c 50 -t 0-12:00 --mem=100000 --wrap="/n/holyscratch01/hanage_lab/lcavalli/BCH_GBS/NEXTFLOW_PIPELINE/Files/standard-RAxML-master/raxmlHPC-PTHREADS-SSE3 -T 50 -m GTRGAMMA -p 12345 -# 100 -s ../11.SNIPPY_MULTI/clean_outgroup.full.aln -n T1 -o Outgroup"
 # Generate 250 bootstrap tree to infer statistical support of the branches.
@@ -371,9 +371,80 @@ sbatch -p test -c 50 -t 0-12:00 --mem=100000 --wrap="/n/holyscratch01/hanage_lab
 
 
 
-#  MASHTREE
+# 13. MASHTREE
+## 13.1. Get samples
+```
+mkdir 12.MASHTREE
+cd 12.MASHTREE
+
+# Move LOD BCH
+while IFS= read -r i; do
+    base=$(echo $i | cut -d '_' -f1)
+    cp ../0.RAW_READS/S$base\_{1,2}.fastq.gz .
+done < BCH_accesions_LOD.txt
+
+# Install and activate SRA tools
+conda create -n sra-tools
+source activate sra-tools
+conda install bioconda::sra-tools
+
+# Download Raw reads
+sbatch -p test -t 0-12:00 --mem=100000 --wrap="prefetch --option-file canada_accesions_LOD.txt"
+sbatch -p test -t 0-12:00 --mem=100000 --wrap="prefetch --option-file CDC_accesions_LOD.txt"
+sbatch -p test -t 0-12:00 --mem=100000 --wrap="prefetch --option-file Ireland_accesions_LOD.txt"
+sbatch -p test -t 0-12:00 --mem=100000 --wrap="prefetch --option-file malawi_accesions_LOD.txt"
+sbatch -p test -t 0-12:00 --mem=100000 --wrap="prefetch --option-file Netherlands_accesions_LOD.txt"
+
+# Extract the paired end reads
+for i in *RR*
+do
+  sbatch -p shared -t 0-00:10 --mem=10000 --wrap="fasterq-dump --split-files $i/*sra"
+done
+# Gzip them
+for file in *.fastq; do
+    sbatch -p shared -t 0-00:10 --mem=10000 --wrap="gzip "$file""
+done
+```
+## 13.2. Run ASSEMBLY
+```
+module load python
+source activate unicycler
+mkdir 1.ASSEMBLY/
+cd 1.ASSEMBLY/
+for i in ../0.RAW_READS/*1.fastq.gz
+do
+  base=$(echo $i | cut -d '/' -f3-3 | cut -d '_' -f1-1)
+ sbatch -p shared -c 1 -t 0-02:00 --mem=10000 --wrap="unicycler -1 ../0.RAW_READS/$base\_trimmed_1.fastq.gz -2 ../0.RAW_READS/$base\_trimmed_2.fastq.gz -o $base\.unicycler.out
+ mv $base\.unicycler.out/assembly.fasta $base\.fasta"
+done
+```
+## 13.2. Run Mashtree
 ```
 module load python
 source activate mashtree
-sbatch -p shared -t 0-01:00 --mem=10000 --wrap="mashtree *.fastq* > tree3.dnd"
+sbatch -p shared -t 3-00:00 --mem=100000 --wrap="mashtree *.fasta > tree.dnd"
+mkdir 2.MASHTREE
+mv tree.dnd 2.MASHTREE
+```
+## 13.3. SRST2
+```
+module load python
+source activate srst2
+mkdir 3.SEROTYPE_MLST
+cd 3.SEROTYPE_MLST
+for i in ../0.RAW_READS/*1.fastq.gz
+do
+ base=$(echo $i | cut -d '/' -f3-3 | cut -d '_' -f1-1)
+ sbatch -p shared -c 1 -t 0-01:00 --mem=10000 --wrap="srst2 --input_pe ../0.RAW_READS/$base\_{1,2}.fastq.gz --output $base --log --gene_db ../../Files/GBS-SBG.fasta --mlst_db ../../Files/Streptococcus_agalactiae.fasta --mlst_definitions ../../Files/profiles_csv --mlst_delimiter '_'"
+done
+# Summarise Results
+awk 'FNR==1 && NR!=1 {next} {print}' *__genes__GBS-SBG__results.txt > Global_serotypes.txt
+awk 'FNR==1 && NR!=1 {next} {print}' *_mlst__Streptococcus_agalactiae__results.txt > Global_mlst.txt
+```
+### 13.4. CC
+```
+cut -f1,2 Global_mlst.txt  | tail -n +2  | sed 's/\t/,/g' | sort -t',' -k2,2 | sed 's/\*//g'  | sed 's/\?//g'  > STs.txt
+cut -d',' -f1,9 ../../Files/GBS_CC_profiles.csv | tail -n +2  | sort -t',' -k1,1 > GBS_ST_CC_ref.txt
+echo "ST,Sample,clonal_complex" > combined_results_with_cc.txt
+join -t',' -1 2 -2 1 -a 1 -e 'NA' -o 1.2,1.1,2.2 STs.txt GBS_ST_CC_ref.txt -a1  >> combined_results_with_cc.txt
 ```
