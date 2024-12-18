@@ -14,9 +14,10 @@ library(tidyverse)
 library(khroma)
 library(colorBlindness)
 library(ggplot2)
+library(cowplot)
 
 # load data
-setwd("~/GitHub/BCH-GBS/2.Statistical_Analysis")
+setwd("~/GitHub/BCH-GBS/2.Statistical_Analysis/Data")
 data <- read.xlsx("Clinical_Genomic_data.xlsx", sheetIndex = 1) 
 # Remove contaminated samples
 data_clean <- data|>
@@ -103,8 +104,70 @@ Age_Sero_CC_df
 ```
 # Figure 1 - Figure
 ```{r}
+# Age distribution of CC
+N_Age <- data_clean  |>
+  mutate(Age_cat = ifelse(grepl("Older", Age_cat), "Older Children", Age_cat))|>  
+  group_by(Age_cat) |>
+  summarise(N = n())
+df_CC_AGE <- data_clean |>  
+  mutate(CC = factor(CC, levels = rev(c(17,23, 12,19, 459, 1)))) |>
+  mutate(Age_cat = ifelse(grepl("Older", Age_cat), "Older Children", Age_cat)) |>
+  mutate(Age_cat = factor(Age_cat, levels = c("EOD", "LOD", "VLOD", "Older Children", "Adults"))) |>
+  group_by(CC, Age_cat) |>
+  summarise(Count = n(), .groups = 'drop') |>
+  group_by(Age_cat) |>  # Ensure proportions are calculated per age group
+  mutate(Proportion = Count / sum(Count)) 
+
+p1 <- ggplot() +
+  geom_bar(data= df_CC_AGE, 
+           aes(x = Age_cat, y = Proportion, fill = as.factor(CC)), 
+           stat = "identity", position = "stack") +
+  geom_text(data= N_Age, 
+            aes(y= 1.05, x= Age_cat , label = paste0("n=", N)), 
+            size = 5, color = "black")+
+  theme_classic() +
+  xlab("Age group") +
+  ylab("Proportion") +
+  labs(fill = "CC") +
+  scale_fill_manual(values = color("light")(7)) +
+  theme(axis.text.x = element_text(angle = 60, hjust = 1, size=15), 
+        axis.text.y = element_text(size=15), 
+        axis.title = element_text(size=15), 
+        legend.text = element_text(size=15), 
+        legend.title = element_text(size=15), 
+        legend.position ="none")
+
+# Age distribution of Serotypes
+df_Serotype_AGE <- data_clean |>  
+  mutate(Age_cat = ifelse(grepl("Older", Age_cat), "Older Children", Age_cat))|> 
+  mutate(Age_cat = factor(Age_cat, levels= c("EOD", "LOD", "VLOD", "Older Children", "Adults")))|>
+  group_by(Serotype, Age_cat) |>
+  summarise(Count = n(), .groups = 'drop') |>
+  group_by(Age_cat) |>  # Ensure proportions are calculated per age group
+  mutate(Proportion = Count / sum(Count)) 
+
+p2 <- ggplot() +
+  geom_bar(data= df_Serotype_AGE, 
+           aes(x = Age_cat, y = Proportion, fill = Serotype), 
+           stat = "identity", position = "stack") +
+  geom_text(data= N_Age, 
+            aes(y= 1.05, x= Age_cat , label = paste0("n=", N)), 
+            size = 5, color = "black")+
+  theme_classic() +
+  xlab("Age group") +
+  ylab("Proportion") +
+  labs(fill = "Serotype") +
+  scale_fill_manual(values = color("vibrant")(7)) +
+  theme(axis.text.x = element_text(angle = 60, hjust = 1, size=15), 
+        axis.text.y = element_text(size=15), 
+        axis.title = element_text(size=15), 
+        legend.text = element_text(size=15), 
+        legend.title = element_text(size=15), 
+        legend.position = "none")
+
 # Time distribution of CC
-data_clean |> 
+p3 <- data_clean |>  
+  mutate(CC = factor(CC, levels = rev(c(17,23, 12,19, 459, 1))))|> 
   mutate(year.of.cx = year(Date.of.cx))|> 
   group_by(CC, year.of.cx) |>
   summarise(Count = n(), .groups = 'drop') |>
@@ -116,9 +179,14 @@ data_clean |>
   ylab("Proportion") +
   labs(fill = "CC")+
   scale_fill_manual(values = color("light")(7))+
-  theme(axis.text.x = element_text(angle = 60, hjust = 1))
+  theme(axis.text.x = element_text(angle = 60, hjust = 1, size=15), 
+        axis.text.y = element_text(size=15), 
+        axis.title = element_text(size=15), 
+        legend.text = element_text(size=15), 
+        legend.title = element_text(size=15))
+
 # Time distribution of Serotypes
-data_clean |> 
+p4 <- data_clean |> 
   mutate(year.of.cx = year(Date.of.cx))|> 
   group_by(Serotype, year.of.cx) |>
   summarise(Count = n(), .groups = 'drop') |>
@@ -130,7 +198,42 @@ data_clean |>
   ylab("Proportion") +
   labs(fill = "Serotype")+
   scale_fill_manual(values = color("vibrant")(6))+
-  theme(axis.text.x = element_text(angle = 60, hjust = 1))
+  theme(axis.text.x = element_text(angle = 60, hjust = 1, size=15), 
+        axis.text.y = element_text(size=15), 
+        axis.title = element_text(size=15), 
+        legend.text = element_text(size=15), 
+        legend.title = element_text(size=15))
+
+# Test for differences of CC across Age_cat
+fisher.test(data_clean$Age_cat, data_clean$CC, workspace = 2e8)
+library(rcompanion)
+CC_tab <- xtabs(~ Age_cat + CC, data = data_clean)
+pairwiseNominalIndependence(CC_tab,
+                                 fisher = TRUE,
+                                 gtest  = FALSE,
+                                 chisq  = FALSE,
+                                 method = "fdr")
+data_clean_LOD_VLOD <- data_clean |> filter(Age_cat %in% c("LOD", "VLOD"))
+fisher.test(data_clean_LOD_VLOD$Age_cat, data_clean_LOD_VLOD$CC, workspace = 2e8)
+
+# Test for differences of serotype across Age_cat
+fisher.test(data_clean$Age_cat, data_clean$Serotype, workspace = 2e8)
+library(rcompanion)
+Serotype_tab <- xtabs(~ Age_cat + Serotype, data = data_clean)
+pairwiseNominalIndependence(Serotype_tab,
+                                 fisher = TRUE,
+                                 gtest  = FALSE,
+                                 chisq  = FALSE,
+                                 method = "fdr")
+# Test for differences of CC across years
+CC_tab2 <- xtabs(~ as.numeric(year(Date.of.cx)) + CC, data = data_clean)
+chisq.test(CC_tab2)
+# Test for differences of serotype across years
+Serotype_tab2 <- xtabs(~ as.numeric(year(Date.of.cx)) + Serotype, data = data_clean)
+chisq.test(Serotype_tab2)
+
+
+
 ```
 
 # Molecular characteristics of the bacterial population
@@ -139,14 +242,14 @@ data_clean |>
 data_clean |>
   group_by(CC)|>
   summarise(N= n())|>
-  mutate(p= round(100*(N/sum(N))))|>
+  mutate(p= round(100*(N/sum(N)),1))|>
   arrange(-N)
 
 # ST distribution
 data_clean |>
   group_by(ST)|>
   summarise(N= n())|>
-  mutate(p= round(100*(N/sum(N))))|>
+  mutate(p= round(100*(N/sum(N)),1))|>
   arrange(-N)
 
 # STs by CC distribution
@@ -161,10 +264,9 @@ data_clean |>
   group_by(Serotype, CC) |>
   summarise(N = n(), .groups = "drop") |>
   pivot_wider(names_from = CC, values_from = N) |>
-  select(Serotype, "CC1", "CC12", "CC17","CC19", "CC23", "CC459","CCNA")|>
-  rename("NF"="CCNA")|>
-  replace_na(list("CC1" = 0, "CC12" = 0, "CC17" = 0, "CC19" = 0, "CC23" = 0, "CC459" = 0, "NF" = 0))|>
-  mutate(across(c("CC1", "CC12", "CC17","CC19", "CC23", "CC459", "NF"), ~ paste(., " (", round(. / sum(.) * 100), "%)", sep="")))
+  select(Serotype, "CC1", "CC12", "CC17","CC19", "CC23", "CC459")|>
+  replace_na(list("CC1" = 0, "CC12" = 0, "CC17" = 0, "CC19" = 0, "CC23" = 0, "CC459" = 0))|>
+  mutate(across(c("CC1", "CC12", "CC17","CC19", "CC23", "CC459"), ~ paste(., " (", round(. / sum(.) * 100), "%)", sep="")))
 
 
 # Serotype distribution of STs
@@ -489,11 +591,11 @@ InSilico_res_per_CC_df <- data_clean|>
             M_type=paste(sum(Res_Gene.MEFA+Res_Gene.MSRD!=0), " (", round(100*mean(Res_Gene.MEFA+Res_Gene.MSRD!=0)), "%)",sep=""),
             X23S1_SNP=paste(sum(Res_MUT.X23S1_SNP)," (", round(100*mean(Res_MUT.X23S1_SNP==1)), "%)",sep=""),
             X23S3_SNP=paste(sum(Res_MUT.X23S3_SNP)," (", round(100*mean(Res_MUT.X23S3_SNP==1)), "%)",sep=""),
-            Penicillin=paste(sum(Res_MUT.X23S1_SNP+Res_MUT.X23S3_SNP)," (", round(100*mean(Res_MUT.X23S1_SNP+Res_MUT.X23S3_SNP==1)), "%)",sep=""),
+            Penicillin=paste(sum(Res_MUT.X23S1_SNP+Res_MUT.X23S3_SNP)," (", round(100*mean(Res_MUT.X23S1_SNP+Res_MUT.X23S3_SNP!=0)), "%)",sep=""),
             GYRA_SNP=paste(sum(Res_MUT.GYRA_SNP)," (", round(100*mean(Res_MUT.GYRA_SNP==1)), "%)",sep=""),
             PARC_SNP=paste(sum(Res_MUT.PARC_SNP)," (", round(100*mean(Res_MUT.PARC_SNP==1)), "%)",sep=""),
             GYRA_SNP=paste(sum(Res_MUT.GYRA_SNP)," (", round(100*mean(Res_MUT.GYRA_SNP==1)), "%)",sep=""),
-            FLuoroquinolones=paste(sum(Res_MUT.PARC_SNP+Res_MUT.GYRA_SNP)," (", round(100*mean(Res_MUT.PARC_SNP+Res_MUT.GYRA_SNP==1)), "%)",sep=""))|> 
+            FLuoroquinolones=paste(sum(Res_MUT.PARC_SNP+Res_MUT.GYRA_SNP)," (", round(100*mean(as.numeric(Res_MUT.PARC_SNP+Res_MUT.GYRA_SNP)!=0)), "%)",sep=""))|> 
   mutate(CC= paste("CC", CC, " (N=", N, ")", sep=""))|> 
   select(-N)
 InSilico_res_per_CC_df_t <- cbind(as.data.frame(t(InSilico_res_per_CC_df)), as.data.frame(t(In_silico_df)))
@@ -530,125 +632,260 @@ data_clean |>
 # FIgure 3. 
 # Presence/Absence of resistance genes across year, CCs, Serotypes, and clinical severity (ICU & Meningitis)
 ```{r}
+
+# Distribution per year
+df_AST_year <- data_clean |>
+  rename("VAN"="Vancomycin", 
+         "PEN"="Penicillin", 
+         "ERY"="Erythromycin", 
+         "CLI"="Clindamycin")|>
+  mutate(year.of.cx = year(Date.of.cx)) |> 
+  group_by(year.of.cx) |> 
+  summarise(PEN = mean(PEN != "s"),
+            VAN = mean(VAN != "s"),
+            ERY = mean(ERY!= "s"),
+            CLI = mean(CLI != "s")) |> 
+  pivot_longer(cols = -year.of.cx,  # Pivot all columns except 'year.of.cx'
+               names_to = "Gene",   # Name the gene column
+               values_to = "Proportion")
+heatmap_AST_year <- ggplot(df_AST_year, aes(y = Gene, x = as.factor(year.of.cx), fill = Proportion)) +
+  geom_tile() +
+  geom_vline(xintercept = which(levels(as.factor(df_AST_year$year.of.cx)) == "2010"), color = "red", linetype = "dashed", size =1 ) +
+    annotate("segment", x = 1, xend = 3, y = 4, yend = 4, color = "red", arrow = arrow(length = unit(0.2, "inches")), size = 1) +
+  annotate("text", x = 5.5, y = Inf, label = "AIP\nguidelines\nupdated", vjust = 1.5, color = "red", size = 4.5) +
+  scale_fill_gradient(low = "white", high = "#0077BB") +  # Customize colors
+  labs(title = "Year of Diagnosis", x = "Year", y = "Res. Phenotype\n\n\n\n\n", fill = "Proportion") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 15), 
+        axis.title.x = element_blank(), 
+        plot.title = element_text(hjust = 0.5, size = 15), 
+        legend.title = element_text(size = 15), 
+        legend.text= element_text(size = 15), 
+        axis.text.y = element_text(size = 15), 
+        axis.title.y = element_text(size = 15)) 
+
+
+
+# Draw the plot and arrow
+grid::grid.draw(arrowGrob)
+print(p)
 # Distribution per year
 df_year <- data_clean |>
   mutate(year.of.cx = year(Date.of.cx)) |> 
   group_by(year.of.cx) |> 
-  summarise(ANT6IA = mean(Res_Gene.ANT6IA == 1),
-            APH3III = mean(Res_Gene.APH3III == 1),
+  summarise("ANT6IA-APH3III" = mean(Res_Gene.ANT6IA+Res_Gene.APH3III == 2),
             TETM = mean(Res_Gene.TETM == 1),
             TETO = mean(Res_Gene.TETO == 1),
             ERMA = mean(Res_Gene.ERMA == 1),
             ERMB = mean(Res_Gene.ERMB == 1),
             ERMT = mean(Res_Gene.ERMT == 1),
-            MEFA = mean(Res_Gene.MEFA == 1),
-            MSRD = mean(Res_Gene.MSRD == 1)) |> 
+            "MEFA-MSRD" = mean(Res_Gene.MEFA+Res_Gene.MSRD== 2))  |> 
   pivot_longer(cols = -year.of.cx,  # Pivot all columns except 'year.of.cx'
                names_to = "Gene",   # Name the gene column
                values_to = "Proportion")
-heatmap_year <- ggplot(df_year, aes(x = Gene, y = as.factor(year.of.cx), fill = Proportion)) +
+heatmap_year <- ggplot(df_year, aes(y = Gene, x = as.factor(year.of.cx), fill = Proportion)) +
   geom_tile() +
-  scale_fill_gradient(low = "white", high = "blue") +  # Customize colors
-  labs(title = "Proportion of Resistance Genes by Year", y = "Year", x = "Resistance Gene", fill = "Proportion") +
+  geom_vline(xintercept = which(levels(as.factor(df_year$year.of.cx)) == "2010"), color = "red", linetype = "dashed", size =1.5 ) +
+  scale_fill_gradient(low = "white", high = "#009988") +  # Customize colors
+  labs(title = "Year of Diagnosis", x = "Year", y = "Resistance Gene", fill = "Proportion") +
   theme_minimal() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))  # Rotate x-axis labels for readability
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 15), 
+        axis.title.x = element_blank(), 
+        plot.title = element_text(hjust = 0.5, size = 15), 
+        legend.title = element_text(size = 15), 
+        legend.text= element_text(size = 15), 
+        axis.text.y = element_text(size = 15), 
+        axis.title.y = element_text(size = 15))  # Rotate x-axis labels for readability
 
 # Distribution per CC
 df_CC <- data_clean |>
   group_by(CC) |> 
-  summarise(ANT6IA = mean(Res_Gene.ANT6IA == 1),
-            APH3III = mean(Res_Gene.APH3III == 1),
+  summarise("ANT6IA-APH3III" = mean(Res_Gene.ANT6IA+Res_Gene.APH3III == 2),
             TETM = mean(Res_Gene.TETM == 1),
             TETO = mean(Res_Gene.TETO == 1),
             ERMA = mean(Res_Gene.ERMA == 1),
             ERMB = mean(Res_Gene.ERMB == 1),
             ERMT = mean(Res_Gene.ERMT == 1),
-            MEFA = mean(Res_Gene.MEFA == 1),
-            MSRD = mean(Res_Gene.MSRD == 1)) |> 
+            "MEFA-MSRD" = mean(Res_Gene.MEFA+Res_Gene.MSRD== 2))  |> 
   pivot_longer(cols = -CC,  
                names_to = "Gene",   
                values_to = "Proportion")
-heatmap_CC <- ggplot(df_CC, aes(x = Gene, y = as.factor(CC), fill = Proportion)) +
+heatmap_CC <- ggplot(df_CC, aes(y = Gene, x = as.factor(CC), fill = Proportion)) +
   geom_tile() +
-  scale_fill_gradient(low = "white", high = "orange") + 
-  labs(title = "Proportion of Resistance Genes by CC", y = "CC", x = "Resistance Gene", fill = "Proportion") +
+  scale_fill_gradient(low = "white", high = "#EE8866") + 
+  labs(title = "CC", x = "CC", y = "Resistance Gene", fill = "Proportion") +
   theme_minimal() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))  
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 15),
+        axis.title.y = element_blank(),
+        axis.title.x = element_blank(), 
+        plot.title = element_text(hjust = 0.5, size = 15), 
+        axis.text.y= element_blank(), 
+        legend.title = element_text(size = 15), 
+        legend.text= element_text(size = 15))  
 
 
 # Distribution per Serotype
 df_Serotype <- data_clean |>
   group_by(Serotype) |> 
-  summarise(ANT6IA = mean(Res_Gene.ANT6IA == 1),
-            APH3III = mean(Res_Gene.APH3III == 1),
+  summarise("ANT6IA-APH3III" = mean(Res_Gene.ANT6IA+Res_Gene.APH3III == 2),
             TETM = mean(Res_Gene.TETM == 1),
             TETO = mean(Res_Gene.TETO == 1),
             ERMA = mean(Res_Gene.ERMA == 1),
             ERMB = mean(Res_Gene.ERMB == 1),
             ERMT = mean(Res_Gene.ERMT == 1),
-            MEFA = mean(Res_Gene.MEFA == 1),
-            MSRD = mean(Res_Gene.MSRD == 1)) |> 
+            "MEFA-MSRD" = mean(Res_Gene.MEFA+Res_Gene.MSRD== 2))  |> 
   pivot_longer(cols = -Serotype,  
                names_to = "Gene",   
                values_to = "Proportion")
-heatmap_Serotype <- ggplot(df_Serotype, aes(x = Gene, y = as.factor(Serotype), fill = Proportion)) +
+heatmap_Serotype <- ggplot(df_Serotype, aes(y = Gene, x = as.factor(Serotype), fill = Proportion)) +
   geom_tile() +
-  scale_fill_gradient(low = "white", high = "yellow3") + 
-  labs(title = "Proportion of Resistance Genes by Serotype", y = "Serotype", x = "Resistance Gene", fill = "Proportion") +
+  scale_fill_gradient(low = "white", high = "#EECC66") + 
+  labs(title = "Serotype", x = "Serotype", y = "Resistance Gene", fill = "Proportion") +
   theme_minimal() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))  
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 15),
+        axis.title.x = element_blank(), 
+        plot.title = element_text(hjust = 0.5, size = 15), 
+        legend.title = element_text(size = 15), 
+        legend.text= element_text(size = 15), 
+        axis.text.y = element_text(size = 15), 
+        axis.title.y = element_text(size = 15))  
 
 
 # Distribution per ICU
 df_ICU <- data_clean |>
+  mutate(ICU= ifelse(ICU==0, "No", "Yes"))|>
   group_by(ICU) |> 
-  summarise(ANT6IA = mean(Res_Gene.ANT6IA == 1),
-            APH3III = mean(Res_Gene.APH3III == 1),
+  summarise("ANT6IA-APH3III" = mean(Res_Gene.ANT6IA+Res_Gene.APH3III == 2),
             TETM = mean(Res_Gene.TETM == 1),
             TETO = mean(Res_Gene.TETO == 1),
             ERMA = mean(Res_Gene.ERMA == 1),
             ERMB = mean(Res_Gene.ERMB == 1),
             ERMT = mean(Res_Gene.ERMT == 1),
-            MEFA = mean(Res_Gene.MEFA == 1),
-            MSRD = mean(Res_Gene.MSRD == 1)) |> 
+            "MEFA-MSRD" = mean(Res_Gene.MEFA+Res_Gene.MSRD== 2)) |> 
   pivot_longer(cols = -ICU,  
                names_to = "Gene",   
                values_to = "Proportion")
-heatmap_ICU <- ggplot(df_ICU, aes(x = Gene, y = as.factor(ICU), fill = Proportion)) +
+heatmap_ICU <- ggplot(df_ICU, aes(y = Gene, x = as.factor(ICU), fill = Proportion)) +
   geom_tile() +
-  scale_fill_gradient(low = "white", high = "darkred") + 
-  labs(title = "Proportion of Resistance Genes by ICU", y = "ICU", x = "Resistance Gene", fill = "Proportion") +
+  scale_fill_gradient(low = "white", high = "#663333") + 
+  labs(title = "ICU admission", x = "ICU", fill = "Proportion") +
   theme_minimal() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1)) 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 15),
+        axis.title.y = element_blank(),
+        axis.title.x = element_blank(), 
+        plot.title = element_text(hjust = 0.5, size = 15), 
+        axis.text.y= element_blank(), 
+        legend.title = element_text(size = 15), 
+        legend.text= element_text(size = 15)) 
 
 
 # Distribution per Meningitis
 df_Meningitis <- data_clean |>
+  mutate(Meningitis= ifelse(Meningitis==0, "No", "Yes"))|>
   group_by(Meningitis) |> 
-  summarise(ANT6IA = mean(Res_Gene.ANT6IA == 1),
-            APH3III = mean(Res_Gene.APH3III == 1),
+  summarise("ANT6IA-APH3III" = mean(Res_Gene.ANT6IA+Res_Gene.APH3III == 2),
             TETM = mean(Res_Gene.TETM == 1),
             TETO = mean(Res_Gene.TETO == 1),
             ERMA = mean(Res_Gene.ERMA == 1),
             ERMB = mean(Res_Gene.ERMB == 1),
             ERMT = mean(Res_Gene.ERMT == 1),
-            MEFA = mean(Res_Gene.MEFA == 1),
-            MSRD = mean(Res_Gene.MSRD == 1)) |> 
+            "MEFA-MSRD" = mean(Res_Gene.MEFA+Res_Gene.MSRD== 2)) |> 
   pivot_longer(cols = -Meningitis,  
                names_to = "Gene",   
                values_to = "Proportion")
-heatmap_Meningitis <- ggplot(df_Meningitis, aes(x = Gene, y = as.factor(Meningitis), fill = Proportion)) +
+heatmap_Meningitis <- ggplot(df_Meningitis, aes(y = Gene, x = as.factor(Meningitis), fill = Proportion)) +
   geom_tile() +
-  scale_fill_gradient(low = "white", high = "darkred") + 
-  labs(title = "Proportion of Resistance Genes by Meningitis", y = "Meningitis", x = "Resistance Gene", fill = "Proportion") +
+  scale_fill_gradient(low = "white", high = "#663333") + 
+  labs(title = "Meningitis", x = "Meningitis", y = "", fill = "Proportion") +
   theme_minimal() +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1)) 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 15),
+        axis.title.y = element_blank(),
+        axis.title.x = element_blank(), 
+        plot.title = element_text(hjust = 0.5, size = 15), 
+        axis.text.y= element_blank(), 
+        legend.title = element_text(size = 15), 
+        legend.text= element_text(size = 15)) 
 
 
 # Join
-library(patchwork)
-heatmap <- (heatmap_year) |(heatmap_Serotype /  heatmap_CC) | (heatmap_ICU / heatmap_Meningitis ) 
-heatmap
+heatmap_grid1 <- plot_grid(heatmap_Serotype + theme(legend.position= "none"),
+          heatmap_CC + theme(legend.position= "none"), 
+          heatmap_ICU + theme(legend.position= "none"), 
+          heatmap_Meningitis + theme(legend.position= "none"),
+          ncol = 4,  
+          rel_widths = c(0.3, 0.25, 0.1, 0.1))
+
+heatmap_grid2 <- plot_grid(heatmap_AST_year + theme(legend.position= "none"),  
+                           heatmap_year + theme(legend.position= "none"), 
+          heatmap_grid1,
+          ncol = 1,  
+          rel_heights = c(0.25, 0.4, 0.4))
+
+heatmap_grid_legend <- plot_grid(get_legend(heatmap_AST_year), 
+                                 get_legend(heatmap_year),
+          get_legend(heatmap_Serotype), 
+          get_legend(heatmap_CC),
+          get_legend(heatmap_ICU),
+          ncol = 1,  
+          rel_heights = c(0.1,0.1, 0.1, 0.1, 0.1))
+   
+plot_grid(heatmap_grid2, heatmap_grid_legend,
+          ncol = 2,  
+          rel_widths = c(0.7, 0.1))
+# save landscape 12 x 12
+
+
+# statistical associations 
+chisq.test(data_clean$Erythromycin,as.numeric(year(data_clean$Date.of.cx)))
+chisq.test(data_clean$Clindamycin,as.numeric(year(data_clean$Date.of.cx)))
+chisq.test(ifelse(data_clean$Clindamycin=="s", 0, 1) ,as.numeric(year(data_clean$Date.of.cx)))
+chisq.test(data_clean$Res_Gene.TETO ,as.numeric(year(data_clean$Date.of.cx)))
+chisq.test(data_clean$Res_Gene.TETM ,as.numeric(year(data_clean$Date.of.cx)))
+chisq.test(data_clean$Res_Gene.MSRD ,as.numeric(year(data_clean$Date.of.cx)))
+chisq.test(data_clean$Res_Gene.ERMA ,as.numeric(year(data_clean$Date.of.cx)))
+chisq.test(data_clean$Res_Gene.ERMB ,as.numeric(year(data_clean$Date.of.cx)))
+chisq.test(data_clean$Res_Gene.ERMT ,as.numeric(year(data_clean$Date.of.cx)))
+chisq.test(data_clean$Res_Gene.APH3III ,as.numeric(year(data_clean$Date.of.cx)))
+
+# Check whether the prevalence of erythromycin resistance genes has changed before vs after 2011: 
+chisq.test(data_clean$Res_Gene.MSRD , ifelse(as.numeric(year(data_clean$Date.of.cx))>2011,1,0))
+data_clean |>
+  mutate(date =ifelse(as.numeric(year(Date.of.cx))>2013,1,0) )|>
+  group_by(date) |>
+  summarise(N= sum(Res_Gene.MSRD), 
+            mean = mean(Res_Gene.MSRD), 
+            N2 = sum(Res_Gene.ERMA+Res_Gene.ERMB+Res_Gene.ERMT), 
+            mean2 = mean(Res_Gene.ERMA+Res_Gene.ERMB+Res_Gene.ERMT))
+chisq.test(data_clean$Res_Gene.MEFA , ifelse(as.numeric(year(data_clean$Date.of.cx))>2011,1,0))
+chisq.test(data_clean$Res_Gene.ERMA , ifelse(as.numeric(year(data_clean$Date.of.cx))>2011,1,0))
+chisq.test(data_clean$Res_Gene.ERMB , ifelse(as.numeric(year(data_clean$Date.of.cx))>2011,1,0))
+chisq.test(data_clean$Res_Gene.ERMT , ifelse(as.numeric(year(data_clean$Date.of.cx))>2011,1,0))
+
+
+# Check whether the prevalence of resistance phenotypes and genes differs across disease severity : 
+## ICU
+chisq.test(data_clean$Erythromycin, data_clean$ICU)
+chisq.test(data_clean$Clindamycin,data_clean$ICU)
+chisq.test(ifelse(data_clean$Clindamycin=="s", 0, 1) ,data_clean$ICU)
+chisq.test(data_clean$Res_Gene.TETO ,data_clean$ICU)
+chisq.test(data_clean$Res_Gene.TETM ,data_clean$ICU)
+chisq.test(data_clean$Res_Gene.MSRD ,data_clean$ICU)
+chisq.test(data_clean$Res_Gene.ERMA ,data_clean$ICU)
+chisq.test(data_clean$Res_Gene.ERMB ,data_clean$ICU)
+chisq.test(data_clean$Res_Gene.ERMT ,data_clean$ICU)
+chisq.test(data_clean$Res_Gene.APH3III ,data_clean$ICU)
+## Meningitis
+chisq.test(data_clean$Erythromycin, data_clean$Meningitis)
+chisq.test(data_clean$Clindamycin,data_clean$Meningitis)
+chisq.test(ifelse(data_clean$Clindamycin=="s", 0, 1) ,data_clean$Meningitis)
+chisq.test(data_clean$Res_Gene.TETO ,data_clean$Meningitis)
+chisq.test(data_clean$Res_Gene.TETM ,data_clean$Meningitis)
+chisq.test(data_clean$Res_Gene.MSRD ,data_clean$Meningitis)
+chisq.test(data_clean$Res_Gene.ERMA ,data_clean$Meningitis)
+chisq.test(data_clean$Res_Gene.ERMB ,data_clean$Meningitis)
+chisq.test(data_clean$Res_Gene.ERMT ,data_clean$Meningitis)
+chisq.test(data_clean$Res_Gene.APH3III ,data_clean$Meningitis)
+
 ```
 
 

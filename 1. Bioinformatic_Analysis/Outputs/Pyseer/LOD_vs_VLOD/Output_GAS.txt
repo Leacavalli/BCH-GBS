@@ -1,0 +1,19 @@
+variant	af	filter-pvalue	lrt-pvalue	beta	beta-std-err	variant_h2	notes
+Surface_protein.ALP1	1.91E-01	1.41E-01	5.14E-01	-1.45E-01	2.21E-01	8.05E-02	
+Surface_protein.ALP23	2.94E-02	5.17E-01	7.39E-01	-1.13E-01	3.39E-01	4.11E-02	bad-chisq
+Surface_protein.ALPHA	1.03E-01	8.91E-02	2.85E-01	-2.60E-01	2.41E-01	1.31E-01	bad-chisq
+Surface_protein.HVGA	5.88E-01	1.35E-01	6.29E-01	1.11E-01	2.28E-01	5.96E-02	
+Surface_protein.PI1	7.21E-01	4.02E-01	7.95E-01	3.94E-02	1.51E-01	3.20E-02	
+Surface_protein.PI2A1	2.79E-01	1.33E-03	5.77E-03	-5.17E-01	1.81E-01	3.31E-01	
+Surface_protein.PI2A2	8.82E-02	9.77E-02	1.19E-01	3.87E-01	2.45E-01	1.91E-01	bad-chisq
+Surface_protein.PI2A	3.68E-01	4.41E-02	1.26E-01	-2.96E-01	1.91E-01	1.87E-01	
+Surface_protein.PI2B	5.59E-01	8.86E-02	3.55E-01	1.78E-01	1.91E-01	1.14E-01	
+Surface_protein.RIB	6.76E-01	9.97E-03	8.49E-02	3.51E-01	2.01E-01	2.11E-01	
+Surface_protein.SRR1	3.97E-01	9.61E-02	4.66E-01	-1.58E-01	2.15E-01	9.00E-02	
+Surface_protein.SRR2	5.88E-01	1.35E-01	6.29E-01	1.11E-01	2.28E-01	5.96E-02	
+Surface_protein.Sip.1a	1.18E-01	2.64E-01	2.21E-01	2.65E-01	2.14E-01	1.50E-01	bad-chisq
+Surface_protein.Sip.3a	8.82E-01	2.64E-01	2.21E-01	-2.65E-01	2.14E-01	1.50E-01	bad-chisq
+Virulence_Gene.lmb	9.85E-01	5.16E-01	2.77E-01	-5.06E-01	4.61E-01	1.34E-01	bad-chisq
+Virulence_Gene.scpB	9.71E-01	5.17E-01	8.95E-01	4.59E-02	3.48E-01	1.63E-02	bad-chisq
+Virulence_Gene.hylB	9.26E-01	1.34E-01	1.88E-01	-3.49E-01	2.62E-01	1.62E-01	bad-chisq
+Virulence_Gene.fbsB	7.79E-01	7.06E-01	7.98E-01	-5.28E-02	2.06E-01	3.16E-02	

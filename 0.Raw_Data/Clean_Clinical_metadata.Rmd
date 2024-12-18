@@ -64,8 +64,8 @@ metadata_clinical_V4 <- metadata_clinical_V3|>
 
 # Add laboratory and clinical diagnostics
 metadata_clinical_V5 <- metadata_clinical_V4|>  
-  mutate(Neutropenia= ifelse(as.numeric(ANC)*1000 < 1500, 1, 0),
-         Leukocytosis= ifelse(as.numeric(WBC) *1000 > 10500, 1, 0), 
+  mutate(Neutropenia= ifelse(as.numeric(ANC)*1000 < 1000, 1, 0),
+         Leukocytosis= ifelse(as.numeric(WBC) *1000 >= 10500, 1, 0), 
          Leukopenia= ifelse(as.numeric(WBC)*1000 < 3500, 1, 0))|>
   mutate(Meningitis= ifelse(isolated_from == "blood", 0, 1))
 ```
@@ -136,11 +136,13 @@ meta_Genomic_data <- left_join(left_join(left_join(left_join(left_join(left_join
   mutate(CC= ifelse(ID_number  ==11, 23,CC))|> 
   mutate(CC= ifelse(ID_number  ==47, 19,CC))|> 
   mutate(CC= ifelse(ID_number  ==8, 17,CC))|> 
-  mutate(CC= ifelse(ID_number  ==64, 12,CC))
+  mutate(CC= ifelse(ID_number  ==64, 12,CC))|> 
+  mutate(Surface_protein.PI2A = Surface_protein.PI2A1+ Surface_protein.PI2A2, .before = Surface_protein.PI2B)
+  
 ```
 # Save 
 ```{r}
-setwd("~/GitHub/BCH-GBS/2.Statistical_Analysis")
+setwd("~/GitHub/BCH-GBS/2.Statistical_Analysis/Data")
 write.xlsx(meta_Genomic_data, "Clinical_Genomic_data.xlsx")
 ```
 
