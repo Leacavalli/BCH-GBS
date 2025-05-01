@@ -16,12 +16,15 @@ library(tidyverse)
 # load data
 setwd("~/GitHub/BCH-GBS/0.Raw_Data")
 metadata <- read.xlsx("GBS_mastersheet_LC.xlsx", sheetIndex = 1)
+GBS_pleocytosis_WBC_numbers <- read.csv("GBS_pleocytosis_WBC_numbers.csv")
 
+# Join CSF WBC counts
+metadata_new <- left_join(metadata, GBS_pleocytosis_WBC_numbers |> rename(ID=Sample) |> select(ID, CSF.WBC))
 
 # CLEAN DATA
 # Keep only columns of interest
-metadata_clinical <- metadata |> 
-select(ID, Source, Same_patient, Date.of.cx, DOB, Admitted.to, Penicillin, Vancomycin, Erhthromycin, Clindamycin, WBC, Hb, platelet, ANC, ALC)|> 
+metadata_clinical <- metadata_new |> 
+select(ID, Source, Same_patient, Date.of.cx, DOB, Admitted.to, Penicillin, Vancomycin, Erhthromycin, Clindamycin, WBC, Hb, platelet, ANC, ALC, CSF.WBC)|> 
   rename("Erythromycin"="Erhthromycin", "isolated_from"= "Source", "Admission_loc"="Admitted.to")|>
   mutate(Date.of.cx= as.Date(Date.of.cx, "%d%b%Y"))|>
   mutate(days_at_dx= as.numeric(Date.of.cx - DOB))|>
@@ -41,7 +44,8 @@ metadata_clinical_unique <- metadata_clinical |>
 metadata_clinical_Same <- metadata_clinical |> 
   filter(Same_patient == "Yes")|> 
   filter(ID %in% c("41_S41", "48_S48", "59_S59", "67_S67", "70_S70", "73_S73", "77_S77", "92_S92", "95_S95"))|>
-  mutate(isolated_from="blood; csf")
+  mutate(isolated_from="blood; csf")|>
+  mutate(isolated_from=ifelse(ID== "73_S73", "blood", isolated_from))
 
 metadata_clinical_V2 <- rbind(metadata_clinical_unique, metadata_clinical_Same)|>
   select(-Same_patient)
@@ -66,8 +70,11 @@ metadata_clinical_V4 <- metadata_clinical_V3|>
 metadata_clinical_V5 <- metadata_clinical_V4|>  
   mutate(Neutropenia= ifelse(as.numeric(ANC)*1000 < 1000, 1, 0),
          Leukocytosis= ifelse(as.numeric(WBC) *1000 >= 10500, 1, 0), 
-         Leukopenia= ifelse(as.numeric(WBC)*1000 < 3500, 1, 0))|>
-  mutate(Meningitis= ifelse(isolated_from == "blood", 0, 1))
+         Leukopenia= ifelse(as.numeric(WBC)*1000 < 3500, 1, 0), 
+         CSF_pleiocytosis= ifelse((days_at_dx<= 28 & CSF.WBC>30) | (days_at_dx> 28 & CSF.WBC>=10) , 1, 0))|>
+  mutate(CSF_pleiocytosis= ifelse(is.na(CSF_pleiocytosis), 0, CSF_pleiocytosis))|>
+  mutate(Meningitis= ifelse((isolated_from == "blood" & CSF_pleiocytosis==0), 0, 1))|>
+  mutate(Meningitis= ifelse(ID %in% c("17_S17", "37_S37"), 0, Meningitis))
 ```
 # Add Genomic data 
 ```{r}

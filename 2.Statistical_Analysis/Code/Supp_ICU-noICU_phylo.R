@@ -1,0 +1,209 @@
+## -------------------------------------- ##
+## ----    INITIALIZE ENVIRONMENT   ----- ##
+## -------------------------------------- ##
+
+# Clean environment
+rm( list = ls() )
+
+# load libraries
+library(ggtree)
+library(ape)
+library(dplyr)
+library(ggnewscale)
+library(ggplot2)
+library(phytools)
+library(RColorBrewer)
+library(stringr)
+library(cowplot)
+library(readr)
+library(ggpubr)
+library(adephylo)
+
+# load metadata
+setwd("~/GitHub/BCH-GBS/2.Statistical_Analysis/Data")
+metadata_BCH <- read.xlsx("Clinical_Genomic_data.xlsx", sheetIndex = 1) |>
+  filter(! ID %in% c("1_S1","32_S32","35_S35","81_S81"))|> 
+  mutate(label = paste0("S", as.numeric(sub("_.*", "", ID))))|>
+  mutate(Age_cat= ifelse(grepl("Older",Age_cat), "Older Children", Age_cat))
+
+# Subset data 
+metadata_BCH_Infant <-  metadata_BCH |> filter(Age_cat %in% c("EOD", "LOD", "VLOD"))
+metadata_BCH_noInfant <-  metadata_BCH |> filter(!Age_cat %in% c("EOD", "LOD", "VLOD"))
+metadata_BCH_ICU <-  metadata_BCH |> filter(Admission_loc=="ICU")
+metadata_BCH_noICU <-  metadata_BCH |> filter(Admission_loc=="other")
+metadata_BCH_Meningitis <-  metadata_BCH |> filter(Meningitis==1)
+metadata_BCH_noMeningitis <-  metadata_BCH |> filter(Meningitis==0)
+
+# Import tree
+setwd("~/GitHub/BCH-GBS/1. Bioinformatic_Analysis/Outputs")
+tree_GBS_BCH <- read.tree("RAxML_bipartitions.T3")
+
+
+## ------------------------------ ##
+## ---- PREPARE & PLOT TREE ----- ##
+## ------------------------------ ##
+
+# Make trees
+tree_GBS_BCH_clean <- keep.tip(tree_GBS_BCH, c(metadata_BCH$label, "Outgroup"))
+tree_GBS_BCH_clean_Infant <- keep.tip(tree_GBS_BCH, c(metadata_BCH_Infant$label, "Outgroup"))
+tree_GBS_BCH_clean_noInfant <- keep.tip(tree_GBS_BCH, c(metadata_BCH_noInfant$label, "Outgroup"))
+tree_GBS_BCH_clean_ICU <- keep.tip(tree_GBS_BCH, c(metadata_BCH_ICU$label, "Outgroup"))
+tree_GBS_BCH_clean_noICU <- keep.tip(tree_GBS_BCH, c(metadata_BCH_noICU$label, "Outgroup"))
+tree_GBS_BCH_clean_Meningitis <- keep.tip(tree_GBS_BCH, c(metadata_BCH_Meningitis$label, "Outgroup"))
+tree_GBS_BCH_clean_noMeningitis <- keep.tip(tree_GBS_BCH, c(metadata_BCH_noMeningitis$label, "Outgroup"))
+
+# Root trees
+tree_GBS_BCH_Final <- (drop.tip(root(tree_GBS_BCH_clean, "Outgroup"),  c("Outgroup")))
+tree_GBS_BCH_Final_Infant <- (drop.tip(root(tree_GBS_BCH_clean_Infant, "Outgroup"),  c("Outgroup")))
+tree_GBS_BCH_Final_noInfant <- (drop.tip(root(tree_GBS_BCH_clean_noInfant, "Outgroup"),  c("Outgroup")))
+tree_GBS_BCH_Final_ICU <- (drop.tip(root(tree_GBS_BCH_clean_ICU, "Outgroup"),  c("Outgroup")))
+tree_GBS_BCH_Final_noICU <- (drop.tip(root(tree_GBS_BCH_clean_noICU, "Outgroup"),  c("Outgroup")))
+tree_GBS_BCH_Final_Meningitis <- (drop.tip(root(tree_GBS_BCH_clean_Meningitis, "Outgroup"),  c("Outgroup")))
+tree_GBS_BCH_Final_noMeningitis <- (drop.tip(root(tree_GBS_BCH_clean_noMeningitis, "Outgroup"),  c("Outgroup")))
+
+## -------------------------------------------- ##
+## ---- PREPARE METADATA  ----- ##
+## -------------------------------------------- ##
+
+# SEROTYPE
+Metadata_serotype = data.frame(metadata_BCH$Serotype)
+row.names(Metadata_serotype)= metadata_BCH$label
+colnames(Metadata_serotype)= c("1")
+
+# Age cat
+Metadata_Age_cat = data.frame(metadata_BCH$Age_cat)
+row.names(Metadata_Age_cat)= metadata_BCH$label
+Metadata_Age_cat$metadata_BCH.Age_cat =  factor(Metadata_Age_cat$metadata_BCH.Age_cat, levels = c("EOD", "LOD", "VLOD", "Older Children", "Adults"))
+colnames(Metadata_Age_cat)= c("2")
+
+
+# ------------------------------------------- #
+# ---- ENFORCE CONSISTENT TIP LABEL ORDER ---- #
+# ------------------------------------------- #
+
+# Use the main tree's tip order as reference (after rooting and dropping Outgroup)
+ref_tip_order <- tree_GBS_BCH_Final$tip.label
+
+# Function to filter tip labels based on subset and retain reference order
+order_subset_tips <- function(tree_subset, ref_tip_order) {
+  tree_subset$tip.label <- factor(tree_subset$tip.label, levels = ref_tip_order)
+  tree_subset$tip.label <- as.character(sort(tree_subset$tip.label))
+  tree_subset
+}
+
+# Reorder all trees to match reference tip order
+tree_GBS_BCH_Final_Infant <- order_subset_tips(tree_GBS_BCH_Final_Infant, ref_tip_order)
+tree_GBS_BCH_Final_noInfant <- order_subset_tips(tree_GBS_BCH_Final_noInfant, ref_tip_order)
+tree_GBS_BCH_Final_ICU <- order_subset_tips(tree_GBS_BCH_Final_ICU, ref_tip_order)
+tree_GBS_BCH_Final_noICU <- order_subset_tips(tree_GBS_BCH_Final_noICU, ref_tip_order)
+tree_GBS_BCH_Final_Meningitis <- order_subset_tips(tree_GBS_BCH_Final_Meningitis, ref_tip_order)
+tree_GBS_BCH_Final_noMeningitis <- order_subset_tips(tree_GBS_BCH_Final_noMeningitis, ref_tip_order)
+
+# --------------------------------------------- #
+# ---- ADD CC DATA TO MATCHING TIP ORDER  ----- #
+# --------------------------------------------- #
+
+# Recreate tree_CC objects with matching tip order
+Metadata_CC <- metadata_BCH |> select(label, CC)
+tree_CC_Infant <- full_join(tree_GBS_BCH_Final_Infant, Metadata_CC, by = 'label')
+tree_CC_noInfant <- full_join(tree_GBS_BCH_Final_noInfant, Metadata_CC, by = 'label')
+tree_CC_ICU <- full_join(tree_GBS_BCH_Final_ICU, Metadata_CC, by = 'label')
+tree_CC_noICU <- full_join(tree_GBS_BCH_Final_noICU, Metadata_CC, by = 'label')
+tree_CC_Meningitis <- full_join(tree_GBS_BCH_Final_Meningitis, Metadata_CC, by = 'label')
+tree_CC_noMeningitis <- full_join(tree_GBS_BCH_Final_noMeningitis, Metadata_CC, by = 'label')
+
+# ----------------------------------------- #
+# ---- REDEFINE MAKE_PLOT WITH ORDER  ----- #
+# ----------------------------------------- #
+colors_Age <- c("#A01813", "#125A56", "#52B2D9", "#FD9A44", "#AAD1EE")
+names(colors_Age) <- levels(Metadata_Age_cat[,1])
+
+
+Make_plot <- function(tree, tip_order = NULL) {
+  # Base tree plot
+  p <- ggtree(tree, ladderize = FALSE, lwd = 0.5) + 
+    geom_tippoint(aes(colour = as.factor(CC)), size = 2) +
+    scale_colour_manual(name = "Clonal\nComplex", values = color("light")(7))
+  
+  # Enforce tip order (if provided)
+  if (!is.null(tip_order)) {
+    present_tips <- intersect(tip_order, tree$tip.label)
+    p <- p + scale_y_discrete(limits = rev(present_tips))
+  }
+  
+  p0 <- p + new_scale_fill()
+  p1 <- gheatmap(p0, Metadata_serotype, width = 0.05, offset = 0.0002,
+                 font.size = 3, colnames_offset_y = -1, color = "white") +
+    scale_fill_manual(name = "1. Serotype",values = color("vibrant")(6)) +
+    theme(legend.position = "none")
+  
+  p4 <- p1 + new_scale_fill()
+  p5 <- gheatmap(p4, Metadata_Age_cat, width = 0.05, offset = 0.0014,
+                 font.size = 3, colnames_offset_y = -1, color = "white") +
+    scale_fill_manual(name = "2. Age of Onset",values = colors_Age) +
+    ggtree::vexpand(.03, -1)
+  
+  return(p5)
+}
+
+# --------------------------------- #
+# ---- PLOT TREES CONSISTENTLY ---- #
+# --------------------------------- #
+
+plot_tree_Infant <- Make_plot(tree_CC_Infant) + 
+  ggtitle("Infants") + 
+  theme(plot.title = element_text(hjust = 0.5),
+        legend.position = "none")
+
+plot_tree_noInfant <- Make_plot(tree_CC_noInfant) + 
+  ggtitle("Older Patients") + 
+  theme(plot.title = element_text(hjust = 0.5),
+        legend.position = "none")
+
+plot_tree_ICU <- Make_plot(tree_CC_ICU) + 
+  ggtitle("ICU") + 
+  theme(plot.title = element_text(hjust = 0.5),
+        legend.position = "none")
+
+plot_tree_noICU <- Make_plot(tree_CC_noICU) + 
+  ggtitle("no ICU") + 
+  theme(plot.title = element_text(hjust = 0.5),
+        legend.position = "none")
+
+plot_tree_Meningitis <- Make_plot(tree_CC_Meningitis) + 
+  ggtitle("Meningitis") + 
+  theme(plot.title = element_text(hjust = 0.5),
+        legend.position = "none")
+
+plot_tree_noMeningitis <- Make_plot(tree_CC_noMeningitis) + 
+  ggtitle("no Meningitis") + 
+  theme(plot.title = element_text(hjust = 0.5),
+        legend.position = "none")
+
+
+# Extract legends
+legend_cc <- get_legend(Make_plot(tree_CC_ICU) + 
+                          theme(legend.position = "right", 
+                                legend.title = element_text(size = 10),
+                                legend.text = element_text(size = 9)))
+
+# For better control with cowplot
+library(cowplot)
+
+# Alternative with cowplot
+plot_grid(
+  plot_grid(
+    plot_tree_Infant, 
+    plot_tree_noInfant, 
+    plot_tree_ICU, 
+    plot_tree_noICU, 
+    plot_tree_Meningitis,
+    plot_tree_noMeningitis,
+    ncol = 2,
+    labels = c("A", "B", "C", "D", "E", "F"),
+    align = "v"
+  ),
+  legend_cc,
+  ncol = 2,
+  rel_widths = c(5, 1)
+)

@@ -1,0 +1,1007 @@
+---
+title: "Genomicmic Characteristics"
+output: html_document
+date: "2024-10-16"
+---
+# Prepare environment & Load Data
+```{r}
+# Clean environment
+rm( list = ls() )
+
+# load libraries
+library(xlsx)
+library(tidyverse)
+library(khroma)
+library(colorBlindness)
+library(ggplot2)
+library(cowplot)
+
+# load data
+setwd("~/GitHub/BCH-GBS/2.Statistical_Analysis/Data")
+data <- read.xlsx("Clinical_Genomic_data.xlsx", sheetIndex = 1) 
+# Remove contaminated samples
+data_clean <- data|>
+  filter(! ID %in% c("1_S1","32_S32","35_S35","81_S81"))|> 
+  mutate(ICU = ifelse(Admission_loc=="ICU", 1,0))
+
+```
+
+# Invasive GBS surveillance
+```{r}
+# Number of patients 
+nrow(data_clean)
+
+# Isolation from blood vs CSF
+table(data_clean$Meningitis)
+table(data_clean$Meningitis, data_clean$isolated_from)
+table(data_clean$Meningitis, data_clean$Age_cat)
+
+# Age group at Diagnosis
+table(data_clean$Age_cat)
+table(data_clean$infant)
+
+```
+# Table S1 
+```{r}
+# distribution of Serotypes Overall
+Sero_df <- data_clean |> 
+        group_by(Serotype)|> 
+        summarise(N_p= n())|> 
+        mutate("Total"= paste0(N_p, " (",round(100*(N_p/sum(N_p)),1), "%)"))|>
+  dplyr::select(-N_p)
+# distribution of Serotypes in infants
+Sero_df_infant <- data_clean |> 
+        filter(infant ==1) |> 
+        group_by(Serotype)|> 
+        summarise(N_p= n())|> 
+        mutate("Total Infants"= paste0(N_p, " (",round(100*(N_p/sum(N_p)),1), "%)"))|>
+  dplyr::select(-N_p)
+
+# Age distribution of Serotypes
+Age_Sero_df <- data_clean |>
+  mutate(Age_cat = factor(Age_cat, levels = c("EOD", "LOD", "VLOD","Older Children (1-18 years)", "Adults"))) |>
+  group_by(Serotype, Age_cat) |>
+  summarise(N = n(), .groups = "drop") |>
+  pivot_wider(names_from = Age_cat, values_from = N) |>
+  dplyr::select(Serotype, "EOD", "LOD", "VLOD","Older Children (1-18 years)", "Adults")|>
+  replace_na(list("EOD" = 0, "LOD" = 0, "VLOD" = 0, "Older Children (1-18 years)" = 0, "Adults" = 0))|>
+  mutate(across(c("EOD", "LOD", "VLOD","Older Children (1-18 years)", "Adults"), ~ paste(., " (", round(. / sum(.) * 100), "%)", sep="")))
+  
+# Join everything
+Age_Sero_df_FINAL <- left_join(left_join(Age_Sero_df, Sero_df_infant), Sero_df) 
+
+# distribution of CCs Overall
+CC_df <- data_clean |> 
+        group_by(CC)|> 
+        summarise(N_p= n())|> 
+        mutate("Total"= paste0(N_p, " (",round(100*(N_p/sum(N_p)),1), "%)"))|>
+  dplyr::select(-N_p)
+# distribution of CCs in infants
+CC_df_infant <- data_clean |> 
+        filter(infant ==1) |> 
+        group_by(CC)|> 
+        summarise(N_p= n())|> 
+        mutate("Total Infants"= paste0(N_p, " (",round(100*(N_p/sum(N_p)),1), "%)"))|>
+  dplyr::select(-N_p)
+
+# Age distribution of CCs
+Age_CC_df <- data_clean |>
+  mutate(Age_cat = factor(Age_cat, levels = c("EOD", "LOD", "VLOD","Older Children (1-18 years)", "Adults"))) |>
+  group_by(CC, Age_cat) |>
+  summarise(N = n(), .groups = "drop") |>
+  pivot_wider(names_from = Age_cat, values_from = N) |>
+  dplyr::select(CC, "EOD", "LOD", "VLOD","Older Children (1-18 years)", "Adults")|>
+  replace_na(list("EOD" = 0, "LOD" = 0, "VLOD" = 0, "Older Children (1-18 years)" = 0, "Adults" = 0))|>
+  mutate(across(c("EOD", "LOD", "VLOD","Older Children (1-18 years)", "Adults"), ~ paste(., " (", round(. / sum(.) * 100), "%)", sep="")))
+
+# Join everything
+Age_CC_df_FINAL <- left_join(left_join(Age_CC_df, CC_df_infant), CC_df) 
+
+
+# Join for final table 
+Age_Sero_CC_df <- rbind(Age_Sero_df_FINAL |> rename("group"="Serotype"), Age_CC_df_FINAL|> rename("group"="CC"))%>%
+  mutate(group = factor(group, levels = c("Ia", "Ib", "II", "III", "IV", "V", "1", "12", "17", "19", "23", "459"))) %>%
+  arrange(group)
+Age_Sero_CC_df
+```
+# Figure 1 - Figure
+```{r}
+# Age distribution of CC
+N_Age <- data_clean  |>
+  mutate(Age_cat = ifelse(grepl("Older", Age_cat), "Older Children", Age_cat))|>  
+  group_by(Age_cat) |>
+  summarise(N = n())
+df_CC_AGE <- data_clean |>  
+  mutate(CC = factor(CC, levels = rev(c(17,23, 12,19, 459, 1)))) |>
+  mutate(Age_cat = ifelse(grepl("Older", Age_cat), "Older Children", Age_cat)) |>
+  mutate(Age_cat = factor(Age_cat, levels = c("EOD", "LOD", "VLOD", "Older Children", "Adults"))) |>
+  group_by(CC, Age_cat) |>
+  summarise(Count = n(), .groups = 'drop') |>
+  group_by(Age_cat) |>  # Ensure proportions are calculated per age group
+  mutate(Proportion = Count / sum(Count)) 
+
+p1 <- ggplot() +
+  geom_bar(data= df_CC_AGE, 
+           aes(x = Age_cat, y = Proportion, fill = as.factor(CC)), 
+           stat = "identity", position = "stack") +
+  geom_text(data= N_Age, 
+            aes(y= 1.05, x= Age_cat , label = paste0("n=", N)), 
+            size = 5, color = "black")+
+  theme_classic() +
+  xlab("Age group") +
+  ylab("Proportion") +
+  labs(fill = "CC") +
+  scale_fill_manual(values = color("light")(7)) +
+  theme(axis.text.x = element_text(angle = 60, hjust = 1, size=15), 
+        axis.text.y = element_text(size=15), 
+        axis.title = element_text(size=15), 
+        legend.text = element_text(size=15), 
+        legend.title = element_text(size=15), 
+        legend.position ="none")
+
+# Age distribution of Serotypes
+df_Serotype_AGE <- data_clean |>  
+  mutate(Age_cat = ifelse(grepl("Older", Age_cat), "Older Children", Age_cat))|> 
+  mutate(Age_cat = factor(Age_cat, levels= c("EOD", "LOD", "VLOD", "Older Children", "Adults")))|>
+  group_by(Serotype, Age_cat) |>
+  summarise(Count = n(), .groups = 'drop') |>
+  group_by(Age_cat) |>  # Ensure proportions are calculated per age group
+  mutate(Proportion = Count / sum(Count)) 
+
+p2 <- ggplot() +
+  geom_bar(data= df_Serotype_AGE, 
+           aes(x = Age_cat, y = Proportion, fill = Serotype), 
+           stat = "identity", position = "stack") +
+  geom_text(data= N_Age, 
+            aes(y= 1.05, x= Age_cat , label = paste0("n=", N)), 
+            size = 5, color = "black")+
+  theme_classic() +
+  xlab("Age group") +
+  ylab("Proportion") +
+  labs(fill = "Serotype") +
+  scale_fill_manual(values = color("vibrant")(7)) +
+  theme(axis.text.x = element_text(angle = 60, hjust = 1, size=15), 
+        axis.text.y = element_text(size=15), 
+        axis.title = element_text(size=15), 
+        legend.text = element_text(size=15), 
+        legend.title = element_text(size=15), 
+        legend.position = "none")
+
+# Time distribution of CC
+p3 <- data_clean |>  
+  mutate(CC = factor(CC, levels = rev(c(17,23, 12,19, 459, 1))))|> 
+  mutate(year.of.cx = year(Date.of.cx))|> 
+  group_by(CC, year.of.cx) |>
+  summarise(Count = n(), .groups = 'drop') |>
+  mutate(Proportion = Count / sum(Count)) |>
+  ggplot(aes(x=as.factor(year.of.cx), y = Proportion, fill = as.factor(CC))) +
+  geom_bar(stat = "identity") +
+  theme_classic() +
+  xlab("Year of Isolation") +
+  ylab("Proportion") +
+  labs(fill = "CC")+
+  scale_fill_manual(values = color("light")(7))+
+  theme(axis.text.x = element_text(angle = 60, hjust = 1, size=15), 
+        axis.text.y = element_text(size=15), 
+        axis.title = element_text(size=15), 
+        legend.text = element_text(size=15), 
+        legend.title = element_text(size=15))
+
+# Time distribution of Serotypes
+p4 <- data_clean |> 
+  mutate(year.of.cx = year(Date.of.cx))|> 
+  group_by(Serotype, year.of.cx) |>
+  summarise(Count = n(), .groups = 'drop') |>
+  mutate(Proportion = Count / sum(Count)) |>
+  ggplot(aes(x=as.factor(year.of.cx), y = Proportion, fill = Serotype)) +
+  geom_bar(stat = "identity") +
+  theme_classic() +
+  xlab("Year of Isolation") +
+  ylab("Proportion") +
+  labs(fill = "Serotype")+
+  scale_fill_manual(values = color("vibrant")(6))+
+  theme(axis.text.x = element_text(angle = 60, hjust = 1, size=15), 
+        axis.text.y = element_text(size=15), 
+        axis.title = element_text(size=15), 
+        legend.text = element_text(size=15), 
+        legend.title = element_text(size=15))
+
+grid.arrange(p1,  p3,p2, p4, nrow=2)
+
+# Test for differences of CC across Age_cat
+fisher.test(data_clean$Age_cat, data_clean$CC, workspace = 2e8)
+library(rcompanion)
+CC_tab <- xtabs(~ Age_cat + CC, data = data_clean)
+pairwiseNominalIndependence(CC_tab,
+                                 fisher = TRUE,
+                                 gtest  = FALSE,
+                                 chisq  = FALSE,
+                                 method = "fdr")
+data_clean_LOD_VLOD <- data_clean |> filter(Age_cat %in% c("LOD", "VLOD"))
+fisher.test(data_clean_LOD_VLOD$Age_cat, data_clean_LOD_VLOD$CC, workspace = 2e8)
+
+# Test for differences of serotype across Age_cat
+fisher.test(data_clean$Age_cat, data_clean$Serotype, workspace = 2e8)
+library(rcompanion)
+Serotype_tab <- xtabs(~ Age_cat + Serotype, data = data_clean)
+pairwiseNominalIndependence(Serotype_tab,
+                                 fisher = TRUE,
+                                 gtest  = FALSE,
+                                 chisq  = FALSE,
+                                 method = "fdr")
+# Test for differences of CC across years
+CC_tab2 <- xtabs(~ as.numeric(year(Date.of.cx)) + CC, data = data_clean)
+chisq.test(CC_tab2)
+# Test for differences of serotype across years
+Serotype_tab2 <- xtabs(~ as.numeric(year(Date.of.cx)) + Serotype, data = data_clean)
+chisq.test(Serotype_tab2)
+
+
+
+```
+
+# In text info : 
+## CC and ST distributions
+```{r}
+# CC distribution
+data_clean |>
+  group_by(CC)|>
+  summarise(N= n())|>
+  mutate(p= round(100*(N/sum(N)),1))|>
+  arrange(-N)
+
+# ST distribution
+data_clean |>
+  mutate(ST = str_replace(ST, "\\*", ""))|>
+  group_by(ST)|>
+  summarise(N= n())|>
+  mutate(p= round(100*(N/sum(N)),1))|>
+  arrange(-N)
+
+# STs by CC distribution
+data_clean |>
+  group_by(CC, ST)|>
+  summarise(N= n())|>
+  mutate(p= round(100*(N/sum(N))))
+
+# Serotype distribution of CCs
+data_clean |>
+  mutate(CC= paste("CC", CC, sep=""))|>
+  group_by(Serotype, CC) |>
+  summarise(N = n(), .groups = "drop") |>
+  pivot_wider(names_from = CC, values_from = N) |>
+  dplyr::select(Serotype, "CC1", "CC12", "CC17","CC19", "CC23", "CC459")|>
+  replace_na(list("CC1" = 0, "CC12" = 0, "CC17" = 0, "CC19" = 0, "CC23" = 0, "CC459" = 0))|>
+  mutate(across(c("CC1", "CC12", "CC17","CC19", "CC23", "CC459"), ~ paste(., " (", round(. / sum(.) * 100), "%)", sep="")))
+
+
+# Serotype distribution of STs
+data_clean |>
+  mutate(ST= paste("ST", ST, sep=""))|>
+  group_by(Serotype, ST) |>
+  summarise(N = n(), .groups = "drop") |>
+  pivot_wider(names_from = ST, values_from = N) 
+```
+
+## Table S2. 
+```{r}
+# Age distribution of CCs
+CC_Age_df <- data_clean |>
+  mutate(Age_cat = factor(Age_cat, levels = c("EOD", "LOD", "VLOD","Older Children (1-18 years)", "Adults"))) |>
+  group_by(CC, Age_cat) |>
+  summarise(N = n(), .groups = "drop") |>
+  pivot_wider(names_from = Age_cat, values_from = N) |>
+  dplyr::select(CC, "EOD", "LOD", "VLOD","Older Children (1-18 years)", "Adults")|>
+  replace_na(list("EOD" = 0, "LOD" = 0, "VLOD" = 0, "Older Children (1-18 years)" = 0, "Adults" = 0))|>
+  mutate(across(c("EOD", "LOD", "VLOD","Older Children (1-18 years)", "Adults"), ~ paste(., " (", round(. / sum(.) * 100), "%)", sep="")))|>
+  mutate(ST = "Total", .before = "EOD")|>
+  filter(!is.na(CC ))
+
+# Age distribution of STs
+ST_Age_df <- data_clean |>
+  mutate(Age_cat = factor(Age_cat, levels = c("EOD", "LOD", "VLOD","Older Children (1-18 years)", "Adults"))) |>
+  group_by(CC, ST, Age_cat) |>
+  summarise(N = n(), .groups = "drop") |>
+  pivot_wider(names_from = Age_cat, values_from = N) |>
+  dplyr::select(CC, ST, "EOD", "LOD", "VLOD","Older Children (1-18 years)", "Adults")|>
+  replace_na(list("EOD" = 0, "LOD" = 0, "VLOD" = 0, "Older Children (1-18 years)" = 0, "Adults" = 0))|>
+  mutate(across(c("EOD", "LOD", "VLOD","Older Children (1-18 years)", "Adults"), ~ paste(., " (", round(. / sum(.) * 100), "%)", sep="")))|>
+  mutate(ST= paste0("ST",ST))
+# Join
+CC_ST_Age_df <- ST_Age_df
+for(i in 1:nrow(CC_Age_df)){
+  if(nrow(ST_Age_df |> filter(CC == CC_Age_df$CC[i])) >1 ){
+    rows <- which(CC_ST_Age_df$CC == CC_Age_df$CC[i])
+    CC_ST_Age_df <- CC_ST_Age_df |> add_row(CC_Age_df[i,], .before = last(rows)+1)
+  }
+}
+
+# Total columns
+CC_ST_Total_df <- CC_ST_Age_df |>
+  mutate(across(c("EOD", "LOD", "VLOD", "Older Children (1-18 years)", "Adults"),
+                ~ as.numeric(str_split(., "\\(", simplify = TRUE)[,1]))) |>  # Convert extracted values to numeric
+  rowwise() |>  # Apply the sum row-wise
+  mutate(Total = sum(c_across(c("EOD", "LOD", "VLOD", "Older Children (1-18 years)", "Adults")), na.rm = TRUE)) |>  # Sum across the dplyr::selected columns
+  ungroup()|>
+  dplyr::select(CC, ST, Total)
+  
+
+# Final Table 
+CC_ST_Age_df_FINAL <- left_join(CC_ST_Age_df, CC_ST_Total_df)
+CC_ST_Age_df_FINAL
+```
+## Table S3. 
+```{r}
+# ST distribution
+ST_df_0 <- data_clean |>
+  group_by(ST)|>
+  summarise(N= n())|>
+  mutate(p= paste0("(",round(100*(N/sum(N))), "%)"))|>
+  arrange(-N)
+
+# Know ST profiles
+ST_df_1 <- unique(data_clean |>
+  dplyr::select(contains("ST"))|>
+  filter(ST_info.mismatches == "0" & ST != "NF")|>
+  dplyr::select(-ST_info.uncertainty, -ST_info.depth, -ST_info.maxMAF) )
+
+# Known ST profiles with mismatches
+ST_df_2 <- data_clean |>
+  dplyr::select(contains("ST"))|>
+  filter(ST_info.mismatches != "0")|>
+  dplyr::select(-ST_info.uncertainty, -ST_info.depth, -ST_info.maxMAF) 
+
+# New ST profile
+ST_df_3 <- data_clean |>
+  dplyr::select(contains("ST"))|>
+  filter(ST== "NF")|>
+  dplyr::select(-ST_info.uncertainty, -ST_info.depth, -ST_info.maxMAF) 
+
+# Combine
+ST_df <- left_join(ST_df_0, rbind(ST_df_1, ST_df_2, ST_df_3)) 
+colnames(ST_df) <- str_remove(colnames(ST_df), "ST_info.")
+ST_df
+```
+
+
+# In text info : 
+# Coverage of genes encoding proteins of vaccine targets 
+## distribution of Surface protein and virulence factors across all Age groups
+```{r}
+Surf_prot_df <- data_clean |> 
+  mutate(Surface_protein.ALP_FAM = Surface_protein.ALPHA + Surface_protein.ALP1 + Surface_protein.ALP23 + Surface_protein.RIB,
+         Surface_protein.PILUS_island = rowSums(across(contains("PI"))), 
+         Surface_protein.SRR = Surface_protein.SRR1+Surface_protein.SRR2)|>
+  summarise(N=n(),
+            Trivalent = paste(sum(Serotype %in% c("Ia", "Ib", "III")), " (",round(100*mean(Serotype %in% c("Ia", "Ib", "III"))), "%)", sep=""), 
+            Hexavalent = paste(sum(Serotype %in% c("Ia", "Ib", "II", "III", "IV", "V")), " (",round(100*mean(Serotype %in% c("Ia", "Ib", "II", "III", "IV", "V"))), "%)", sep=""),
+            Surface_protein.RIB = paste(sum(Surface_protein.RIB ==1), " (",round(100*mean(Surface_protein.RIB ==1)), "%)", sep=""), 
+            Surface_protein.ALPHA = paste(sum(Surface_protein.ALPHA ==1), " (",round(100*mean(Surface_protein.ALPHA ==1)), "%)", sep=""), 
+            Surface_protein.ALP1 = paste(sum(Surface_protein.ALP1 ==1), " (",round(100*mean(Surface_protein.ALP1 ==1)), "%)", sep=""), 
+            Surface_protein.ALP23 = paste(sum(Surface_protein.ALP23 ==1), " (",round(100*mean(Surface_protein.ALP23 ==1)), "%)", sep=""), 
+            Surface_protein.ALP_FAM= paste(sum(Surface_protein.ALP_FAM>0), " (",round(100*mean(Surface_protein.ALP_FAM>0)), "%)", sep=""), 
+            Surface_protein.PI1  = paste(sum(Surface_protein.PI1  ==1), " (",round(100*mean(Surface_protein.PI1  ==1)), "%)", sep=""), 
+            Surface_protein.PI2A1  = paste(sum(Surface_protein.PI2A1 ==1), " (",round(100*mean(Surface_protein.PI2A1  ==1)), "%)", sep=""), 
+            Surface_protein.PI2A2  = paste(sum(Surface_protein.PI2A2 ==1), " (",round(100*mean(Surface_protein.PI2A2  ==1)), "%)", sep=""), 
+            Surface_protein.PI2B = paste(sum(Surface_protein.PI2B ==1), " (",round(100*mean(Surface_protein.PI2B ==1)), "%)", sep=""), 
+            Surface_protein.PILUS_island= paste(sum(Surface_protein.PILUS_island>0), " (",round(100*mean(Surface_protein.PILUS_island>0)), "%)", sep=""), 
+           Surface_protein.SRR1 = paste(sum(Surface_protein.SRR1 ==1), " (",round(100*mean(Surface_protein.SRR1 ==1)), "%)", sep=""), 
+           Surface_protein.SRR2 = paste(sum(Surface_protein.SRR2 ==1), " (",round(100*mean(Surface_protein.SRR2 ==1)), "%)", sep=""), 
+           Surface_protein.SRR = paste(sum(Surface_protein.SRR ==1), " (",round(100*mean(Surface_protein.SRR ==1)), "%)", sep=""), 
+           Surface_protein.Sip.1a = paste(sum(Surface_protein.Sip.1a ==1), " (",round(100*mean(Surface_protein.Sip.1a ==1)), "%)", sep=""), 
+           Surface_protein.Sip.3a = paste(sum(Surface_protein.Sip.3a ==1), " (",round(100*mean(Surface_protein.Sip.3a ==1)), "%)", sep=""), 
+           Surface_protein.Sip = paste(sum(Surface_protein.Sip ==1), " (",round(100*mean(Surface_protein.Sip ==1)), "%)", sep=""), 
+           Surface_protein.HVGA = paste(sum(Surface_protein.HVGA ==1), " (",round(100*mean(Surface_protein.HVGA ==1)), "%)", sep=""), 
+           Virulence_Gene.scpB = paste(sum(Virulence_Gene.scpB ==1), " (",round(100*mean(Virulence_Gene.scpB ==1)), "%)", sep=""), 
+           Virulence_Gene.lmb = paste(sum(Virulence_Gene.lmb ==1), " (",round(100*mean(Virulence_Gene.lmb ==1)), "%)", sep=""), 
+           Virulence_Gene.hylB = paste(sum(Virulence_Gene.hylB ==1), " (",round(100*mean(Virulence_Gene.hylB ==1)), "%)", sep=""), 
+           Virulence_Gene.fbsB = paste(sum(Virulence_Gene.fbsB ==1), " (",round(100*mean(Virulence_Gene.fbsB ==1)), "%)", sep=""))
+Surf_prot_df
+```
+# In text info : 
+##  distribution of Surface protein and virulence factors across all INFANTS
+```{r}
+Surf_prot_Infant_df <- data_clean |> 
+  filter(days_at_dx <= 365) |> 
+  mutate(Surface_protein.ALP_FAM = Surface_protein.ALPHA + Surface_protein.ALP1 + Surface_protein.ALP23 + Surface_protein.RIB,
+         Surface_protein.PILUS_island = rowSums(across(contains("PI"))), 
+         Surface_protein.SRR = Surface_protein.SRR1+Surface_protein.SRR2)|>
+  summarise(N=n(),
+            Trivalent = paste(sum(Serotype %in% c("Ia", "Ib", "III")), " (",round(100*mean(Serotype %in% c("Ia", "Ib", "III"))), "%)", sep=""), 
+            Hexavalent = paste(sum(Serotype %in% c("Ia", "Ib", "II", "III", "IV", "V")), " (",round(100*mean(Serotype %in% c("Ia", "Ib", "II", "III", "IV", "V"))), "%)", sep=""),
+            Surface_protein.RIB = paste(sum(Surface_protein.RIB ==1), " (",round(100*mean(Surface_protein.RIB ==1)), "%)", sep=""), 
+            Surface_protein.ALPHA = paste(sum(Surface_protein.ALPHA ==1), " (",round(100*mean(Surface_protein.ALPHA ==1)), "%)", sep=""), 
+            Surface_protein.ALP1 = paste(sum(Surface_protein.ALP1 ==1), " (",round(100*mean(Surface_protein.ALP1 ==1)), "%)", sep=""), 
+            Surface_protein.ALP23 = paste(sum(Surface_protein.ALP23 ==1), " (",round(100*mean(Surface_protein.ALP23 ==1)), "%)", sep=""), 
+            Surface_protein.ALP_FAM= paste(sum(Surface_protein.ALP_FAM>0), " (",round(100*mean(Surface_protein.ALP_FAM>0)), "%)", sep=""), 
+            Surface_protein.PI1  = paste(sum(Surface_protein.PI1  ==1), " (",round(100*mean(Surface_protein.PI1  ==1)), "%)", sep=""), 
+            Surface_protein.PI2A1  = paste(sum(Surface_protein.PI2A1 ==1), " (",round(100*mean(Surface_protein.PI2A1  ==1)), "%)", sep=""), 
+            Surface_protein.PI2A2  = paste(sum(Surface_protein.PI2A2 ==1), " (",round(100*mean(Surface_protein.PI2A2  ==1)), "%)", sep=""), 
+            Surface_protein.PI2B = paste(sum(Surface_protein.PI2B ==1), " (",round(100*mean(Surface_protein.PI2B ==1)), "%)", sep=""), 
+            Surface_protein.PILUS_island= paste(sum(Surface_protein.PILUS_island>0), " (",round(100*mean(Surface_protein.PILUS_island>0)), "%)", sep=""), 
+            Surface_protein.HVGA = paste(sum(Surface_protein.HVGA ==1), " (",round(100*mean(Surface_protein.HVGA ==1)), "%)", sep=""), 
+           Surface_protein.SRR1 = paste(sum(Surface_protein.SRR1 ==1), " (",round(100*mean(Surface_protein.SRR1 ==1)), "%)", sep=""), 
+           Surface_protein.SRR2 = paste(sum(Surface_protein.SRR2 ==1), " (",round(100*mean(Surface_protein.SRR2 ==1)), "%)", sep=""), 
+           Surface_protein.SRR = paste(sum(Surface_protein.SRR ==1), " (",round(100*mean(Surface_protein.SRR ==1)), "%)", sep=""), 
+           Surface_protein.Sip.1a = paste(sum(Surface_protein.Sip.1a ==1), " (",round(100*mean(Surface_protein.Sip.1a ==1)), "%)", sep=""), 
+           Surface_protein.Sip.3a = paste(sum(Surface_protein.Sip.3a ==1), " (",round(100*mean(Surface_protein.Sip.3a ==1)), "%)", sep=""), 
+           Surface_protein.Sip = paste(sum(Surface_protein.Sip ==1), " (",round(100*mean(Surface_protein.Sip ==1)), "%)", sep=""), 
+           Virulence_Gene.scpB = paste(sum(Virulence_Gene.scpB ==1), " (",round(100*mean(Virulence_Gene.scpB ==1)), "%)", sep=""), 
+           Virulence_Gene.lmb = paste(sum(Virulence_Gene.lmb ==1), " (",round(100*mean(Virulence_Gene.lmb ==1)), "%)", sep=""), 
+           Virulence_Gene.hylB = paste(sum(Virulence_Gene.hylB ==1), " (",round(100*mean(Virulence_Gene.hylB ==1)), "%)", sep=""), 
+           Virulence_Gene.fbsB = paste(sum(Virulence_Gene.fbsB ==1), " (",round(100*mean(Virulence_Gene.fbsB ==1)), "%)", sep=""))
+Surf_prot_Infant_df
+```
+# In text info : 
+##  distribution of ALP family proteins per CC
+```{r}
+Surf_prot_per_CC_df <- data_clean |>
+    filter(days_at_dx <= 365) |> 
+  group_by(CC)|> 
+  mutate(Surface_protein.ALP_FAM = Surface_protein.ALPHA + Surface_protein.ALP1 + Surface_protein.ALP23 + Surface_protein.RIB,
+         Surface_protein.PILUS_island = rowSums(across(contains("PI"))), 
+         Surface_protein.SRR = Surface_protein.SRR1+Surface_protein.SRR2)|>
+  summarise(N=n(),
+            Trivalent = paste(sum(Serotype %in% c("Ia", "Ib", "III")), " (",round(100*mean(Serotype %in% c("Ia", "Ib", "III"))), "%)", sep=""), 
+            Hexavalent = paste(sum(Serotype %in% c("Ia", "Ib", "II", "III", "IV", "V")), " (",round(100*mean(Serotype %in% c("Ia", "Ib", "II", "III", "IV", "V"))), "%)", sep=""),
+            Surface_protein.RIB = paste(sum(Surface_protein.RIB ==1), " (",round(100*mean(Surface_protein.RIB ==1)), "%)", sep=""), 
+            Surface_protein.ALPHA = paste(sum(Surface_protein.ALPHA ==1), " (",round(100*mean(Surface_protein.ALPHA ==1)), "%)", sep=""), 
+            Surface_protein.ALP1 = paste(sum(Surface_protein.ALP1 ==1), " (",round(100*mean(Surface_protein.ALP1 ==1)), "%)", sep=""), 
+            Surface_protein.ALP23 = paste(sum(Surface_protein.ALP23 ==1), " (",round(100*mean(Surface_protein.ALP23 ==1)), "%)", sep=""), 
+            Surface_protein.ALP_FAM= paste(sum(Surface_protein.ALP_FAM>0), " (",round(100*mean(Surface_protein.ALP_FAM>0)), "%)", sep=""), 
+            Surface_protein.PI1  = paste(sum(Surface_protein.PI1  ==1), " (",round(100*mean(Surface_protein.PI1  ==1)), "%)", sep=""), 
+            Surface_protein.PI2A1  = paste(sum(Surface_protein.PI2A1 ==1), " (",round(100*mean(Surface_protein.PI2A1  ==1)), "%)", sep=""), 
+            Surface_protein.PI2A2  = paste(sum(Surface_protein.PI2A2 ==1), " (",round(100*mean(Surface_protein.PI2A2  ==1)), "%)", sep=""), 
+            Surface_protein.PI2B = paste(sum(Surface_protein.PI2B ==1), " (",round(100*mean(Surface_protein.PI2B ==1)), "%)", sep=""), 
+            Surface_protein.PILUS_island= paste(sum(Surface_protein.PILUS_island>0), " (",round(100*mean(Surface_protein.PILUS_island>0)), "%)", sep=""), 
+            Surface_protein.HVGA = paste(sum(Surface_protein.HVGA ==1), " (",round(100*mean(Surface_protein.HVGA ==1)), "%)", sep=""), 
+           Surface_protein.SRR1 = paste(sum(Surface_protein.SRR1 ==1), " (",round(100*mean(Surface_protein.SRR1 ==1)), "%)", sep=""), 
+           Surface_protein.SRR2 = paste(sum(Surface_protein.SRR2 ==1), " (",round(100*mean(Surface_protein.SRR2 ==1)), "%)", sep=""), 
+           Surface_protein.SRR = paste(sum(Surface_protein.SRR ==1), " (",round(100*mean(Surface_protein.SRR ==1)), "%)", sep=""), 
+           Surface_protein.Sip.1a = paste(sum(Surface_protein.Sip.1a ==1), " (",round(100*mean(Surface_protein.Sip.1a ==1)), "%)", sep=""), 
+           Surface_protein.Sip.3a = paste(sum(Surface_protein.Sip.3a ==1), " (",round(100*mean(Surface_protein.Sip.3a ==1)), "%)", sep=""), 
+           Surface_protein.Sip = paste(sum(Surface_protein.Sip ==1), " (",round(100*mean(Surface_protein.Sip ==1)), "%)", sep=""), 
+           Virulence_Gene.scpB = paste(sum(Virulence_Gene.scpB ==1), " (",round(100*mean(Virulence_Gene.scpB ==1)), "%)", sep=""), 
+           Virulence_Gene.lmb = paste(sum(Virulence_Gene.lmb ==1), " (",round(100*mean(Virulence_Gene.lmb ==1)), "%)", sep=""), 
+           Virulence_Gene.hylB = paste(sum(Virulence_Gene.hylB ==1), " (",round(100*mean(Virulence_Gene.hylB ==1)), "%)", sep=""), 
+           Virulence_Gene.fbsB = paste(sum(Virulence_Gene.fbsB ==1), " (",round(100*mean(Virulence_Gene.fbsB ==1)), "%)", sep=""))|> 
+  mutate(CC= paste("CC", CC, " (N=", N, ")", sep=""))|> 
+  dplyr::select(-N)
+Surf_prot_per_CC_df_t <- as.data.frame(t(Surf_prot_per_CC_df))
+colnames(Surf_prot_per_CC_df_t) <- Surf_prot_per_CC_df_t[1,]
+Surf_prot_per_CC_df_t <- Surf_prot_per_CC_df_t[-1, ]
+Surf_prot_per_CC_df_t
+```
+
+
+## Table S4.
+# distribution of vaccine targets and surface proteins per Age group
+```{r}
+Surf_prot_per_Age_cat_df <- data_clean |>
+  mutate(Age_cat = factor(Age_cat, levels = c("EOD", "LOD", "VLOD","Older Children (1-18 years)", "Adults"))) |>
+  group_by(Age_cat)|> 
+  mutate(Surface_protein.ALP_FAM = Surface_protein.ALPHA + Surface_protein.ALP1 + Surface_protein.ALP23 + Surface_protein.RIB,
+         Surface_protein.PILUS_island = rowSums(across(contains("PI"))), 
+         Surface_protein.SRR = Surface_protein.SRR1+Surface_protein.SRR2)|>
+  summarise(N=n(),
+            Trivalent = paste(sum(Serotype %in% c("Ia", "Ib", "III")), " (",round(100*mean(Serotype %in% c("Ia", "Ib", "III"))), "%)", sep=""), 
+            Hexavalent = paste(sum(Serotype %in% c("Ia", "Ib", "II", "III", "IV", "V")), " (",round(100*mean(Serotype %in% c("Ia", "Ib", "II", "III", "IV", "V"))), "%)", sep=""),
+            Surface_protein.RIB = paste(sum(Surface_protein.RIB ==1), " (",round(100*mean(Surface_protein.RIB ==1)), "%)", sep=""), 
+            Surface_protein.ALPHA = paste(sum(Surface_protein.ALPHA ==1), " (",round(100*mean(Surface_protein.ALPHA ==1)), "%)", sep=""), 
+            Surface_protein.ALP1 = paste(sum(Surface_protein.ALP1 ==1), " (",round(100*mean(Surface_protein.ALP1 ==1)), "%)", sep=""), 
+            Surface_protein.ALP23 = paste(sum(Surface_protein.ALP23 ==1), " (",round(100*mean(Surface_protein.ALP23 ==1)), "%)", sep=""), 
+            Surface_protein.ALP_FAM= paste(sum(Surface_protein.ALP_FAM>0), " (",round(100*mean(Surface_protein.ALP_FAM>0)), "%)", sep=""), 
+            Surface_protein.PI1  = paste(sum(Surface_protein.PI1  ==1), " (",round(100*mean(Surface_protein.PI1  ==1)), "%)", sep=""), 
+            Surface_protein.PI2A1  = paste(sum(Surface_protein.PI2A1 ==1), " (",round(100*mean(Surface_protein.PI2A1  ==1)), "%)", sep=""), 
+            Surface_protein.PI2A2  = paste(sum(Surface_protein.PI2A2 ==1), " (",round(100*mean(Surface_protein.PI2A2  ==1)), "%)", sep=""), 
+            Surface_protein.PI2B = paste(sum(Surface_protein.PI2B ==1), " (",round(100*mean(Surface_protein.PI2B ==1)), "%)", sep=""), 
+            Surface_protein.PILUS_island= paste(sum(Surface_protein.PILUS_island>0), " (",round(100*mean(Surface_protein.PILUS_island>0)), "%)", sep=""), 
+            Surface_protein.HVGA = paste(sum(Surface_protein.HVGA ==1), " (",round(100*mean(Surface_protein.HVGA ==1)), "%)", sep=""), 
+           Surface_protein.SRR1 = paste(sum(Surface_protein.SRR1 ==1), " (",round(100*mean(Surface_protein.SRR1 ==1)), "%)", sep=""), 
+           Surface_protein.SRR2 = paste(sum(Surface_protein.SRR2 ==1), " (",round(100*mean(Surface_protein.SRR2 ==1)), "%)", sep=""), 
+           Surface_protein.SRR = paste(sum(Surface_protein.SRR ==1), " (",round(100*mean(Surface_protein.SRR ==1)), "%)", sep=""), 
+           Surface_protein.Sip.1a = paste(sum(Surface_protein.Sip.1a ==1), " (",round(100*mean(Surface_protein.Sip.1a ==1)), "%)", sep=""), 
+           Surface_protein.Sip.3a = paste(sum(Surface_protein.Sip.3a ==1), " (",round(100*mean(Surface_protein.Sip.3a ==1)), "%)", sep=""), 
+           Surface_protein.Sip = paste(sum(Surface_protein.Sip ==1), " (",round(100*mean(Surface_protein.Sip ==1)), "%)", sep=""), 
+           Virulence_Gene.scpB = paste(sum(Virulence_Gene.scpB ==1), " (",round(100*mean(Virulence_Gene.scpB ==1)), "%)", sep=""), 
+           Virulence_Gene.lmb = paste(sum(Virulence_Gene.lmb ==1), " (",round(100*mean(Virulence_Gene.lmb ==1)), "%)", sep=""), 
+           Virulence_Gene.hylB = paste(sum(Virulence_Gene.hylB ==1), " (",round(100*mean(Virulence_Gene.hylB ==1)), "%)", sep=""), 
+           Virulence_Gene.fbsB = paste(sum(Virulence_Gene.fbsB ==1), " (",round(100*mean(Virulence_Gene.fbsB ==1)), "%)", sep=""))|> 
+  mutate(Age_cat= paste(Age_cat, " (N=", N, ")", sep=""))|> 
+  dplyr::select(-N)
+Surf_prot_per_Age_cat_df_t <- cbind(as.data.frame(t(Surf_prot_per_Age_cat_df)), as.data.frame(t(Surf_prot_Infant_df)), as.data.frame(t(Surf_prot_df)))
+colnames(Surf_prot_per_Age_cat_df_t) <- Surf_prot_per_Age_cat_df_t[1,]
+colnames(Surf_prot_per_Age_cat_df_t)[length(colnames(Surf_prot_per_Age_cat_df_t))-1] <- "Total Infants (N=70)"
+colnames(Surf_prot_per_Age_cat_df_t)[length(colnames(Surf_prot_per_Age_cat_df_t))] <- "Total (N=87)"
+Surf_prot_per_Age_cat_df_t <- Surf_prot_per_Age_cat_df_t[-1, ]
+Surf_prot_per_Age_cat_df_t
+```
+
+
+# In text info : 
+# Overlap between phenotypic antibiotic resistance and presence of known genotypic markers
+## Phenotypic resistance testing 
+```{r}
+s_df<- data_clean |>
+  summarise(Penicillin= paste(sum(Penicillin =="s"), " (",round(100*mean(Penicillin =="s")), "%)", sep=""), 
+            Vancomycin= paste(sum(Vancomycin =="s"), " (",round(100*mean(Vancomycin =="s")), "%)", sep=""), 
+            Erythromycin= paste(sum(Erythromycin =="s"), " (",round(100*mean(Erythromycin =="s")), "%)", sep=""), 
+            Clindamycin= paste(sum(Clindamycin =="s"), " (",round(100*mean(Clindamycin =="s")), "%)", sep=""))
+i_df<- data_clean |>
+  summarise(Penicillin= paste(sum(Penicillin =="i"), " (",round(100*mean(Penicillin =="i")), "%)", sep=""), 
+            Vancomycin= paste(sum(Vancomycin =="i"), " (",round(100*mean(Vancomycin =="i")), "%)", sep=""), 
+            Erythromycin= paste(sum(Erythromycin =="i"), " (",round(100*mean(Erythromycin =="i")), "%)", sep=""), 
+            Clindamycin= paste(sum(Clindamycin =="i"), " (",round(100*mean(Clindamycin =="i")), "%)", sep=""))
+r_df<- data_clean |>
+  summarise(Penicillin= paste(sum(Penicillin =="r"), " (",round(100*mean(Penicillin =="r")), "%)", sep=""), 
+            Vancomycin= paste(sum(Vancomycin =="r"), " (",round(100*mean(Vancomycin =="r")), "%)", sep=""), 
+            Erythromycin= paste(sum(Erythromycin =="r"), " (",round(100*mean(Erythromycin =="r")), "%)", sep=""), 
+            Clindamycin= paste(sum(Clindamycin =="r"), " (",round(100*mean(Clindamycin =="r")), "%)", sep=""))
+pheno_res_df<- rbind(s_df, i_df, r_df)|>
+  mutate(Resistance = c("Susceptible", "Intermediate Resistance", "Resistant"))|>
+  dplyr::select(Resistance, Penicillin, Vancomycin, Erythromycin, Clindamycin)
+pheno_res_df
+
+
+```
+
+# Table S5 : In-silico detection resistance genes
+```{r}
+### Overall
+In_silico_df <- data_clean |>
+  mutate(Res_MUT.X23S1_SNP= ifelse(Res_MUT.X23S1_SNP != "0", 1, 0),
+         Res_MUT.X23S3_SNP= ifelse(Res_MUT.X23S3_SNP != "0", 1, 0),
+         Res_MUT.GYRA_SNP= ifelse(Res_MUT.GYRA_SNP != "0", 1, 0),
+         Res_MUT.PARC_SNP= ifelse(Res_MUT.PARC_SNP != "0", 1, 0))|>
+  summarise(N=n(),
+            ANT6IA=paste(sum(Res_Gene.ANT6IA), " (", round(100*mean(Res_Gene.ANT6IA==1)), "%)",sep=""),
+            APH3III=paste(sum(Res_Gene.APH3III)," (", round(100*mean(Res_Gene.APH3III==1)), "%)",sep=""),,
+            Aminoglycosides=paste(sum(Res_Gene.ANT6IA+Res_Gene.APH3III!=0), " (", round(100*mean(Res_Gene.ANT6IA+Res_Gene.APH3III!=0)), "%)",sep=""),
+            TETM=paste(sum(Res_Gene.TETM)," (", round(100*mean(Res_Gene.TETM==1)), "%)",sep=""),
+            TETO=paste(sum(Res_Gene.TETO)," (", round(100*mean(Res_Gene.TETO==1)), "%)",sep=""),
+            Tetracyclines=paste(sum(Res_Gene.TETM+Res_Gene.TETO !=0), " (", round(100*mean(Res_Gene.TETM+Res_Gene.TETO !=0)), "%)",sep=""),
+            ERMA=paste(sum(Res_Gene.ERMA)," (", round(100*mean(Res_Gene.ERMA==1)), "%)",sep=""),
+            ERMB=paste(sum(Res_Gene.ERMB)," (", round(100*mean(Res_Gene.ERMB==1)), "%)",sep=""),
+            ERMT=paste(sum(Res_Gene.ERMT)," (", round(100*mean(Res_Gene.ERMT==1)), "%)",sep=""),
+            MLSB=paste(sum(Res_Gene.ERMA+Res_Gene.ERMB+Res_Gene.ERMT!=0)," (", round(100*mean(Res_Gene.ERMA+Res_Gene.ERMB+Res_Gene.ERMT!=0)), "%)",sep=""),
+            MEFA=paste(sum(Res_Gene.MEFA), " (", round(100*mean(Res_Gene.MEFA==1)), "%)",sep=""),
+            MSRD=paste(sum(Res_Gene.MSRD)," (", round(100*mean(Res_Gene.MSRD==1)), "%)",sep=""),
+            M_type=paste(sum(Res_Gene.MEFA+Res_Gene.MSRD!=0), " (", round(100*mean(Res_Gene.MEFA+Res_Gene.MSRD!=0)), "%)",sep=""),
+            X23S1_SNP=paste(sum(Res_MUT.X23S1_SNP)," (", round(100*mean(Res_MUT.X23S1_SNP==1)), "%)",sep=""),
+            X23S3_SNP=paste(sum(Res_MUT.X23S3_SNP)," (", round(100*mean(Res_MUT.X23S3_SNP==1)), "%)",sep=""),
+            Penicillin=paste(sum(Res_MUT.X23S1_SNP+Res_MUT.X23S3_SNP)," (", round(100*mean(Res_MUT.X23S1_SNP+Res_MUT.X23S3_SNP==1)), "%)",sep=""),
+            GYRA_SNP=paste(sum(Res_MUT.GYRA_SNP)," (", round(100*mean(Res_MUT.GYRA_SNP==1)), "%)",sep=""),
+            PARC_SNP=paste(sum(Res_MUT.PARC_SNP)," (", round(100*mean(Res_MUT.PARC_SNP==1)), "%)",sep=""),
+            GYRA_SNP=paste(sum(Res_MUT.GYRA_SNP)," (", round(100*mean(Res_MUT.GYRA_SNP==1)), "%)",sep=""),
+            FLuoroquinolones=paste(sum(Res_MUT.PARC_SNP+Res_MUT.GYRA_SNP)," (", round(100*mean(Res_MUT.PARC_SNP+Res_MUT.GYRA_SNP==1)), "%)",sep=""))|> 
+  mutate(N= paste("Total (N=", N, ")", sep=""))
+
+
+# By CC
+InSilico_res_per_CC_df <- data_clean|>
+  mutate(Res_MUT.X23S1_SNP= ifelse(Res_MUT.X23S1_SNP != "0", 1, 0),
+         Res_MUT.X23S3_SNP= ifelse(Res_MUT.X23S3_SNP != "0", 1, 0),
+         Res_MUT.GYRA_SNP= ifelse(Res_MUT.GYRA_SNP != "0", 1, 0),
+         Res_MUT.PARC_SNP= ifelse(Res_MUT.PARC_SNP != "0", 1, 0)) |>
+  group_by(CC)|>
+  summarise(N=n(),
+            ANT6IA=paste(sum(Res_Gene.ANT6IA), " (", round(100*mean(Res_Gene.ANT6IA==1)), "%)",sep=""),
+            APH3III=paste(sum(Res_Gene.APH3III)," (", round(100*mean(Res_Gene.APH3III==1)), "%)",sep=""),,
+            Aminoglycosides=paste(sum(Res_Gene.ANT6IA+Res_Gene.APH3III!=0), " (", round(100*mean(Res_Gene.ANT6IA+Res_Gene.APH3III!=0)), "%)",sep=""),
+            TETM=paste(sum(Res_Gene.TETM)," (", round(100*mean(Res_Gene.TETM==1)), "%)",sep=""),
+            TETO=paste(sum(Res_Gene.TETO)," (", round(100*mean(Res_Gene.TETO==1)), "%)",sep=""),
+            Tetracyclines=paste(sum(Res_Gene.TETM+Res_Gene.TETO !=0), " (", round(100*mean(Res_Gene.TETM+Res_Gene.TETO !=0)), "%)",sep=""),
+            ERMA=paste(sum(Res_Gene.ERMA)," (", round(100*mean(Res_Gene.ERMA==1)), "%)",sep=""),
+            ERMB=paste(sum(Res_Gene.ERMB)," (", round(100*mean(Res_Gene.ERMB==1)), "%)",sep=""),
+            ERMT=paste(sum(Res_Gene.ERMT)," (", round(100*mean(Res_Gene.ERMT==1)), "%)",sep=""),
+            MLSB=paste(sum(Res_Gene.ERMA+Res_Gene.ERMB+Res_Gene.ERMT!=0)," (", round(100*mean(Res_Gene.ERMA+Res_Gene.ERMB+Res_Gene.ERMT!=0)), "%)",sep=""),
+            MEFA=paste(sum(Res_Gene.MEFA), " (", round(100*mean(Res_Gene.MEFA==1)), "%)",sep=""),
+            MSRD=paste(sum(Res_Gene.MSRD)," (", round(100*mean(Res_Gene.MSRD==1)), "%)",sep=""),
+            M_type=paste(sum(Res_Gene.MEFA+Res_Gene.MSRD!=0), " (", round(100*mean(Res_Gene.MEFA+Res_Gene.MSRD!=0)), "%)",sep=""),
+            X23S1_SNP=paste(sum(Res_MUT.X23S1_SNP)," (", round(100*mean(Res_MUT.X23S1_SNP==1)), "%)",sep=""),
+            X23S3_SNP=paste(sum(Res_MUT.X23S3_SNP)," (", round(100*mean(Res_MUT.X23S3_SNP==1)), "%)",sep=""),
+            Penicillin=paste(sum(Res_MUT.X23S1_SNP+Res_MUT.X23S3_SNP)," (", round(100*mean(Res_MUT.X23S1_SNP+Res_MUT.X23S3_SNP!=0)), "%)",sep=""),
+            GYRA_SNP=paste(sum(Res_MUT.GYRA_SNP)," (", round(100*mean(Res_MUT.GYRA_SNP==1)), "%)",sep=""),
+            PARC_SNP=paste(sum(Res_MUT.PARC_SNP)," (", round(100*mean(Res_MUT.PARC_SNP==1)), "%)",sep=""),
+            GYRA_SNP=paste(sum(Res_MUT.GYRA_SNP)," (", round(100*mean(Res_MUT.GYRA_SNP==1)), "%)",sep=""),
+            FLuoroquinolones=paste(sum(Res_MUT.PARC_SNP+Res_MUT.GYRA_SNP)," (", round(100*mean(as.numeric(Res_MUT.PARC_SNP+Res_MUT.GYRA_SNP)!=0)), "%)",sep=""))|> 
+  mutate(CC= paste("CC", CC, " (N=", N, ")", sep=""))|> 
+  dplyr::select(-N)
+InSilico_res_per_CC_df_t <- cbind(as.data.frame(t(InSilico_res_per_CC_df)), as.data.frame(t(In_silico_df)))
+colnames(InSilico_res_per_CC_df_t) <- InSilico_res_per_CC_df_t[1,]
+InSilico_res_per_CC_df_t <- InSilico_res_per_CC_df_t[-1, ]
+InSilico_res_per_CC_df_t 
+
+
+```
+
+# In text info : 
+# Overlap between phenotype and in-silico resistance
+```{r}
+data_clean |>
+  mutate(Erythromycin= factor(Erythromycin, levels=c("s", "r")))|> 
+  group_by(Erythromycin)|>
+  summarise(N=n(), 
+            MLSB=paste(sum(Res_Gene.ERMA+Res_Gene.ERMB+Res_Gene.ERMT!=0)," (", round(100*mean(Res_Gene.ERMA+Res_Gene.ERMB+Res_Gene.ERMT!=0)), "%)",sep=""),
+            M_type=paste(sum(Res_Gene.MEFA+Res_Gene.MSRD!=0), " (", round(100*mean(Res_Gene.MEFA+Res_Gene.MSRD!=0)), "%)",sep=""), 
+            Total= paste(sum(Res_Gene.ERMA+Res_Gene.ERMB+Res_Gene.ERMT+Res_Gene.MEFA+Res_Gene.MSRD!=0)," (", round(100*mean(Res_Gene.ERMA+Res_Gene.ERMB+Res_Gene.ERMT+Res_Gene.MEFA+Res_Gene.MSRD!=0)), "%)",sep=""))|>
+  mutate(Erythromycin = paste(Erythromycin, " (N=", N, ")", sep=""))|>
+  dplyr::select(-N)
+
+
+data_clean |>
+  mutate(Clindamycin= factor(Clindamycin, levels=c("s", "i","r")))|> 
+  group_by(Clindamycin)|>
+  summarise(N=n(), 
+            MLSB=paste(sum(Res_Gene.ERMA+Res_Gene.ERMB+Res_Gene.ERMT!=0)," (", round(100*mean(Res_Gene.ERMA+Res_Gene.ERMB+Res_Gene.ERMT!=0)), "%)",sep=""))|>
+  mutate(Clindamycin = paste(Clindamycin, " (N=", N, ")", sep=""))|>
+  dplyr::select(-N)
+
+```
+
+# FIgure 3. 
+# Presence/Absence of resistance genes across year, CCs, Serotypes, and clinical severity (ICU & Meningitis)
+```{r}
+
+# Distribution per year
+df_AST_year <- data_clean |>
+  rename("VAN"="Vancomycin", 
+         "PEN"="Penicillin", 
+         "ERY"="Erythromycin", 
+         "CLI"="Clindamycin")|>
+  mutate(year.of.cx = year(Date.of.cx)) |> 
+  group_by(year.of.cx) |> 
+  summarise(PEN = mean(PEN != "s"),
+            VAN = mean(VAN != "s"),
+            ERY = mean(ERY!= "s"),
+            CLI = mean(CLI != "s")) |> 
+  pivot_longer(cols = -year.of.cx,  # Pivot all columns except 'year.of.cx'
+               names_to = "Gene",   # Name the gene column
+               values_to = "Proportion")
+heatmap_AST_year <- ggplot(df_AST_year, aes(y = Gene, x = as.factor(year.of.cx), fill = Proportion)) +
+  geom_tile() +
+  geom_vline(xintercept = which(levels(as.factor(df_AST_year$year.of.cx)) == "2010"), color = "red", linetype = "dashed", size =1 ) +
+    annotate("segment", x = 1, xend = 3, y = 4, yend = 4, color = "red", arrow = arrow(length = unit(0.2, "inches")), size = 1) +
+  annotate("text", x = 5.5, y = Inf, label = "AIP\nguidelines\nupdated", vjust = 1.5, color = "red", size = 4.5) +
+  scale_fill_gradient(low = "white", high = "#0077BB") +  # Customize colors
+  labs(title = "Year of Diagnosis", x = "Year", y = "Res. Phenotype\n\n\n\n\n", fill = "Proportion") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 15), 
+        axis.title.x = element_blank(), 
+        plot.title = element_text(hjust = 0.5, size = 15), 
+        legend.title = element_text(size = 15), 
+        legend.text= element_text(size = 15), 
+        axis.text.y = element_text(size = 15), 
+        axis.title.y = element_text(size = 15)) 
+
+
+
+# Draw the plot and arrow
+# grid::grid.draw(arrowGrob)
+# print(p)
+# Distribution per year
+df_year <- data_clean |>
+  mutate(year.of.cx = year(Date.of.cx)) |> 
+  group_by(year.of.cx) |> 
+  summarise("ANT6IA-APH3III" = mean(Res_Gene.ANT6IA+Res_Gene.APH3III == 2),
+            TETM = mean(Res_Gene.TETM == 1),
+            TETO = mean(Res_Gene.TETO == 1),
+            ERMA = mean(Res_Gene.ERMA == 1),
+            ERMB = mean(Res_Gene.ERMB == 1),
+            ERMT = mean(Res_Gene.ERMT == 1),
+            "MEFA-MSRD" = mean(Res_Gene.MEFA+Res_Gene.MSRD== 2))  |> 
+  pivot_longer(cols = -year.of.cx,  # Pivot all columns except 'year.of.cx'
+               names_to = "Gene",   # Name the gene column
+               values_to = "Proportion")
+heatmap_year <- ggplot(df_year, aes(y = Gene, x = as.factor(year.of.cx), fill = Proportion)) +
+  geom_tile() +
+  geom_vline(xintercept = which(levels(as.factor(df_year$year.of.cx)) == "2010"), color = "red", linetype = "dashed", size =1.5 ) +
+  scale_fill_gradient(low = "white", high = "#009988") +  # Customize colors
+  labs(title = "Year of Diagnosis", x = "Year", y = "Resistance Gene", fill = "Proportion") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 15), 
+        axis.title.x = element_blank(), 
+        plot.title = element_text(hjust = 0.5, size = 15), 
+        legend.title = element_text(size = 15), 
+        legend.text= element_text(size = 15), 
+        axis.text.y = element_text(size = 15), 
+        axis.title.y = element_text(size = 15))  # Rotate x-axis labels for readability
+
+# Distribution per CC
+df_CC <- data_clean |>
+  group_by(CC) |> 
+  summarise("ANT6IA-APH3III" = mean(Res_Gene.ANT6IA+Res_Gene.APH3III == 2),
+            TETM = mean(Res_Gene.TETM == 1),
+            TETO = mean(Res_Gene.TETO == 1),
+            ERMA = mean(Res_Gene.ERMA == 1),
+            ERMB = mean(Res_Gene.ERMB == 1),
+            ERMT = mean(Res_Gene.ERMT == 1),
+            "MEFA-MSRD" = mean(Res_Gene.MEFA+Res_Gene.MSRD== 2))  |> 
+  pivot_longer(cols = -CC,  
+               names_to = "Gene",   
+               values_to = "Proportion")
+heatmap_CC <- ggplot(df_CC, aes(y = Gene, x = as.factor(CC), fill = Proportion)) +
+  geom_tile() +
+  scale_fill_gradient(low = "white", high = "#EE8866") + 
+  labs(title = "CC", x = "CC", y = "Resistance Gene", fill = "Proportion") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 15),
+        axis.title.y = element_blank(),
+        axis.title.x = element_blank(), 
+        plot.title = element_text(hjust = 0.5, size = 15), 
+        axis.text.y= element_blank(), 
+        legend.title = element_text(size = 15), 
+        legend.text= element_text(size = 15))  
+
+
+# Distribution per Serotype
+df_Serotype <- data_clean |>
+  group_by(Serotype) |> 
+  summarise("ANT6IA-APH3III" = mean(Res_Gene.ANT6IA+Res_Gene.APH3III == 2),
+            TETM = mean(Res_Gene.TETM == 1),
+            TETO = mean(Res_Gene.TETO == 1),
+            ERMA = mean(Res_Gene.ERMA == 1),
+            ERMB = mean(Res_Gene.ERMB == 1),
+            ERMT = mean(Res_Gene.ERMT == 1),
+            "MEFA-MSRD" = mean(Res_Gene.MEFA+Res_Gene.MSRD== 2))  |> 
+  pivot_longer(cols = -Serotype,  
+               names_to = "Gene",   
+               values_to = "Proportion")
+heatmap_Serotype <- ggplot(df_Serotype, aes(y = Gene, x = as.factor(Serotype), fill = Proportion)) +
+  geom_tile() +
+  scale_fill_gradient(low = "white", high = "#EECC66") + 
+  labs(title = "Serotype", x = "Serotype", y = "Resistance Gene", fill = "Proportion") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 15),
+        axis.title.x = element_blank(), 
+        plot.title = element_text(hjust = 0.5, size = 15), 
+        legend.title = element_text(size = 15), 
+        legend.text= element_text(size = 15), 
+        axis.text.y = element_text(size = 15), 
+        axis.title.y = element_text(size = 15))  
+
+
+# Distribution per ICU
+df_ICU <- data_clean |>
+  mutate(ICU= ifelse(ICU==0, "No", "Yes"))|>
+  group_by(ICU) |> 
+  summarise("ANT6IA-APH3III" = mean(Res_Gene.ANT6IA+Res_Gene.APH3III == 2),
+            TETM = mean(Res_Gene.TETM == 1),
+            TETO = mean(Res_Gene.TETO == 1),
+            ERMA = mean(Res_Gene.ERMA == 1),
+            ERMB = mean(Res_Gene.ERMB == 1),
+            ERMT = mean(Res_Gene.ERMT == 1),
+            "MEFA-MSRD" = mean(Res_Gene.MEFA+Res_Gene.MSRD== 2)) |> 
+  pivot_longer(cols = -ICU,  
+               names_to = "Gene",   
+               values_to = "Proportion")
+heatmap_ICU <- ggplot(df_ICU, aes(y = Gene, x = as.factor(ICU), fill = Proportion)) +
+  geom_tile() +
+  scale_fill_gradient(low = "white", high = "#663333") + 
+  labs(title = "ICU admission", x = "ICU", fill = "Proportion") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 15),
+        axis.title.y = element_blank(),
+        axis.title.x = element_blank(), 
+        plot.title = element_text(hjust = 0.5, size = 15), 
+        axis.text.y= element_blank(), 
+        legend.title = element_text(size = 15), 
+        legend.text= element_text(size = 15)) 
+
+
+# Distribution per Meningitis
+df_Meningitis <- data_clean |>
+  mutate(Meningitis= ifelse(Meningitis==0, "No", "Yes"))|>
+  group_by(Meningitis) |> 
+  summarise("ANT6IA-APH3III" = mean(Res_Gene.ANT6IA+Res_Gene.APH3III == 2),
+            TETM = mean(Res_Gene.TETM == 1),
+            TETO = mean(Res_Gene.TETO == 1),
+            ERMA = mean(Res_Gene.ERMA == 1),
+            ERMB = mean(Res_Gene.ERMB == 1),
+            ERMT = mean(Res_Gene.ERMT == 1),
+            "MEFA-MSRD" = mean(Res_Gene.MEFA+Res_Gene.MSRD== 2)) |> 
+  pivot_longer(cols = -Meningitis,  
+               names_to = "Gene",   
+               values_to = "Proportion")
+heatmap_Meningitis <- ggplot(df_Meningitis, aes(y = Gene, x = as.factor(Meningitis), fill = Proportion)) +
+  geom_tile() +
+  scale_fill_gradient(low = "white", high = "#663333") + 
+  labs(title = "Meningitis", x = "Meningitis", y = "", fill = "Proportion") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 15),
+        axis.title.y = element_blank(),
+        axis.title.x = element_blank(), 
+        plot.title = element_text(hjust = 0.5, size = 15), 
+        axis.text.y= element_blank(), 
+        legend.title = element_text(size = 15), 
+        legend.text= element_text(size = 15)) 
+
+
+# Join
+heatmap_grid1 <- plot_grid(heatmap_Serotype + theme(legend.position= "none"),
+          heatmap_CC + theme(legend.position= "none"), 
+          heatmap_ICU + theme(legend.position= "none"), 
+          heatmap_Meningitis + theme(legend.position= "none"),
+          ncol = 4,  
+          rel_widths = c(0.3, 0.25, 0.1, 0.1))
+
+heatmap_grid2 <- plot_grid(heatmap_AST_year + theme(legend.position= "none"),  
+                           heatmap_year + theme(legend.position= "none"), 
+          heatmap_grid1,
+          ncol = 1,  
+          rel_heights = c(0.25, 0.4, 0.4))
+
+heatmap_grid_legend <- plot_grid(get_legend(heatmap_AST_year), 
+                                 get_legend(heatmap_year),
+          get_legend(heatmap_Serotype), 
+          get_legend(heatmap_CC),
+          get_legend(heatmap_ICU),
+          ncol = 1,  
+          rel_heights = c(0.1,0.1, 0.1, 0.1, 0.1))
+   
+plot_grid(heatmap_grid2, heatmap_grid_legend,
+          ncol = 2,  
+          rel_widths = c(0.7, 0.1))
+# save landscape 12 x 12
+
+
+# statistical associations 
+chisq.test(data_clean$Erythromycin,as.numeric(year(data_clean$Date.of.cx)))
+chisq.test(data_clean$Clindamycin,as.numeric(year(data_clean$Date.of.cx)))
+chisq.test(ifelse(data_clean$Clindamycin=="s", 0, 1) ,as.numeric(year(data_clean$Date.of.cx)))
+chisq.test(data_clean$Res_Gene.TETO ,as.numeric(year(data_clean$Date.of.cx)))
+chisq.test(data_clean$Res_Gene.TETM ,as.numeric(year(data_clean$Date.of.cx)))
+chisq.test(data_clean$Res_Gene.MSRD ,as.numeric(year(data_clean$Date.of.cx)))
+chisq.test(data_clean$Res_Gene.ERMA ,as.numeric(year(data_clean$Date.of.cx)))
+chisq.test(data_clean$Res_Gene.ERMB ,as.numeric(year(data_clean$Date.of.cx)))
+chisq.test(data_clean$Res_Gene.ERMT ,as.numeric(year(data_clean$Date.of.cx)))
+chisq.test(data_clean$Res_Gene.APH3III ,as.numeric(year(data_clean$Date.of.cx)))
+
+# Check whether the prevalence of erythromycin resistance genes has changed before vs after 2011: 
+chisq.test(data_clean$Res_Gene.MSRD , ifelse(as.numeric(year(data_clean$Date.of.cx))>2011,1,0))
+data_clean |>
+  mutate(date =ifelse(as.numeric(year(Date.of.cx))>2013,1,0) )|>
+  group_by(date) |>
+  summarise(N= sum(Res_Gene.MSRD), 
+            mean = mean(Res_Gene.MSRD), 
+            N2 = sum(Res_Gene.ERMA+Res_Gene.ERMB+Res_Gene.ERMT), 
+            mean2 = mean(Res_Gene.ERMA+Res_Gene.ERMB+Res_Gene.ERMT))
+chisq.test(data_clean$Res_Gene.MEFA , ifelse(as.numeric(year(data_clean$Date.of.cx))>2011,1,0))
+chisq.test(data_clean$Res_Gene.ERMA , ifelse(as.numeric(year(data_clean$Date.of.cx))>2011,1,0))
+chisq.test(data_clean$Res_Gene.ERMB , ifelse(as.numeric(year(data_clean$Date.of.cx))>2011,1,0))
+chisq.test(data_clean$Res_Gene.ERMT , ifelse(as.numeric(year(data_clean$Date.of.cx))>2011,1,0))
+
+
+# Check whether the prevalence of resistance phenotypes and genes differs across disease severity : 
+## ICU
+chisq.test(data_clean$Erythromycin, data_clean$ICU)
+chisq.test(data_clean$Clindamycin,data_clean$ICU)
+chisq.test(ifelse(data_clean$Clindamycin=="s", 0, 1) ,data_clean$ICU)
+chisq.test(data_clean$Res_Gene.TETO ,data_clean$ICU)
+chisq.test(data_clean$Res_Gene.TETM ,data_clean$ICU)
+chisq.test(data_clean$Res_Gene.MSRD ,data_clean$ICU)
+chisq.test(data_clean$Res_Gene.ERMA ,data_clean$ICU)
+chisq.test(data_clean$Res_Gene.ERMB ,data_clean$ICU)
+chisq.test(data_clean$Res_Gene.ERMT ,data_clean$ICU)
+chisq.test(data_clean$Res_Gene.APH3III ,data_clean$ICU)
+## Meningitis
+chisq.test(data_clean$Erythromycin, data_clean$Meningitis)
+chisq.test(data_clean$Clindamycin,data_clean$Meningitis)
+chisq.test(ifelse(data_clean$Clindamycin=="s", 0, 1) ,data_clean$Meningitis)
+chisq.test(data_clean$Res_Gene.TETO ,data_clean$Meningitis)
+chisq.test(data_clean$Res_Gene.TETM ,data_clean$Meningitis)
+chisq.test(data_clean$Res_Gene.MSRD ,data_clean$Meningitis)
+chisq.test(data_clean$Res_Gene.ERMA ,data_clean$Meningitis)
+chisq.test(data_clean$Res_Gene.ERMB ,data_clean$Meningitis)
+chisq.test(data_clean$Res_Gene.ERMT ,data_clean$Meningitis)
+chisq.test(data_clean$Res_Gene.APH3III ,data_clean$Meningitis)
+
+```
+
+
+# Identifying correlates  of severe clinical outcomes
+# TABLE 2   
+```{r}
+# Identify potential confounders: 
+data_clean_ICU_OR <- data_clean |> filter(days_at_dx <= 365)
+# ## Age Categorical
+# chisq.test(data_clean_ICU_OR $ICU, data_clean_ICU_OR$Age_cat)
+# ## Age Continuous (Days at Dx)
+# ### Test Association between Age and Outcome
+# wilcox.test(days_at_dx ~ Admission_loc, data = data_clean_ICU_OR)
+# Age_ICU_mod <- glm(ICU ~ days_at_dx, data = data_clean_ICU_OR, family = binomial)
+# summary(Age_ICU_mod)
+# ### check distribution
+# data_clean_ICU_OR |> 
+#   ggplot()+
+#   geom_histogram(aes(x=days_at_dx))+
+#   facet_grid(ICU ~.)
+# ### Show median + IQR
+# data_clean_ICU_OR |> 
+#   group_by(Admission_loc)|> 
+#   summarise(median_age= paste0(median(days_at_dx), " (IQR:",quantile(days_at_dx, 0.05), ";", quantile(days_at_dx, 0.95), ")"))
+# ### Test Association between Age and Exposures
+# Age_ICU_mod <- glm(ICU ~ days_at_dx, data = data_clean_ICU_OR, family = binomial)
+# get_OR <- function(risk_factor) {
+#   risk_factor_col <- data_clean_ICU_OR[[risk_factor]]
+#   coef(summary(glm(ICU ~ risk_factor_col, data = data_clean_ICU_OR, family = binomial)))[2,4] 
+# }
+# 
+# risk_factors <- colnames(data_clean_ICU_OR |> dplyr::select(contains(c("Surface_protein.", "Virulence_Gene."))))
+# 
+# results <- lapply(risk_factors, get_OR)
+# get_OR(risk_factors[1])
+# get_OR(risk_factors[2])
+# get_OR(risk_factors[3])
+# get_OR(risk_factors[4])
+# get_OR(risk_factors[5])
+# get_OR(risk_factors[6])
+# get_OR(risk_factors[7])
+# get_OR(risk_factors[8])
+# get_OR(risk_factors[9])
+# get_OR(risk_factors[10])
+# get_OR(risk_factors[11])
+# get_OR(risk_factors[12])
+# get_OR(risk_factors[13])
+# 
+# ## CC
+# chisq.test(data_clean_ICU_OR $ICU, data_clean_ICU_OR$CC)
+# ## ST
+# chisq.test(data_clean_ICU_OR $ICU, data_clean_ICU_OR$ST)
+# ## Serotype
+# chisq.test(data_clean_ICU_OR $ICU, data_clean_ICU_OR$Serotype)
+# summary(glm(ICU ~ Serotype, data = data_clean_ICU_OR, family = binomial))
+# ## Meningitis
+# chisq.test(data_clean_ICU_OR $ICU, data_clean_ICU_OR$Meningitis)
+# Meningitis_ICU_mod <- glm(ICU ~ Meningitis, data = data_clean_ICU_OR, family = binomial)
+# summary(Meningitis_ICU_mod)
+
+
+# Function 
+calculate_or <- function(df, risk_factor) {
+  
+  # Ensure that risk_factor is treated as a column from the data_cleanframe
+  risk_factor_col <- df[[risk_factor]]
+  
+  # Create a 2x2 table of ICU vs. Other by the risk factor
+  ICU <- sum(df |> filter(ICU == 1) |> pull(risk_factor))
+  Other <- sum(df |> filter(ICU == 0) |> pull(risk_factor)) 
+  
+  # Logistic Regression
+  log_reg <- glm(ICU ~ risk_factor_col, data = df, family = binomial)
+  log_reg_summary <- coef(summary(log_reg))
+  
+  # Extract Odds Ratio (exponentiate the coefficient) and Confidence Intervals
+  or_value <- exp(log_reg_summary[2, 1])
+  ci_lower <- exp(log_reg_summary[2, 1] - 1.96 * log_reg_summary[2, 2])
+  ci_upper <- exp(log_reg_summary[2, 1] + 1.96 * log_reg_summary[2, 2])
+  
+  # Extract P-value
+  p_value <- round(log_reg_summary[2, 4],3)
+  
+  # Return the formatted OR, CI, and P-value
+  data.frame(
+    Risk_Factor = risk_factor,
+    "ICU (n=31)" = ICU,
+    "Other (n=39)" = Other,
+    "OR (95% CI)" = sprintf("%.2f (%.2f - %.2f)", or_value, ci_lower, ci_upper),
+    "P-value" = p_value
+  )
+}
+
+# List of risk factors to test
+risk_factors <- colnames(data_clean |> 
+                           dplyr::select(contains(c("Surface_protein.", "Virulence_Gene.")))|> 
+                           dplyr::select(-Surface_protein.Sip))
+
+
+# Calculate OR, CI, and P-value for each risk factor
+results <- lapply(risk_factors, calculate_or, df = data_clean_ICU_OR)
+
+# Combine the results into a single data_clean frame
+final_table <- bind_rows(results)
+
+final_table |> 
+  mutate(Risk_Factor = str_remove(str_remove(Risk_Factor, "Surface_protein."), "Virulence_Gene."))
+
+```

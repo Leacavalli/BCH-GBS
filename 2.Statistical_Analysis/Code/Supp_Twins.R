@@ -68,7 +68,7 @@ p2 <- plot_tree_twins_patient2 +
   theme(legend.position = "none")
 legend <- get_legend(plot_tree_twins_patient2)
 
-
+library(patchwork)
 plot_tree_twins_patient+
   geom_rect(aes(xmin=0.006, xmax=0.0064, ymin=88, ymax= 92), alpha=0, colour = "red")+
   geom_segment(aes(x=0.0045, xend =0.006, y=47, yend = 88), lty="dashed", colour = "red")+
@@ -80,7 +80,7 @@ plot_tree_twins_patient+
 #save 10x9 
 
 # Check genomic differences
-metadata_BCH_twins <- metadata |> filter(ID %in% c("92_S92", "93_S93"))
+metadata_BCH_twins <- metadata |> filter(label %in% c("S92", "S93"))
 diff_cols <- sapply(metadata_BCH_twins, function(col) col[1] != col[2])
 # Keep only the columns where the values are different
 metadata_BCH_twins_diff <- metadata_BCH_twins[, diff_cols]
