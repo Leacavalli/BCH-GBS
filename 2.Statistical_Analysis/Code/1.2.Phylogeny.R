@@ -18,6 +18,9 @@ library(cowplot)
 library(readr)
 library(ggpubr)
 library(adephylo)
+library(xlsx)
+library(khroma)
+
 
 # load metadata
 setwd("~/GitHub/BCH-GBS/2.Statistical_Analysis/Data")
@@ -71,6 +74,8 @@ Metadata_Age_cat = data.frame(metadata_BCH$Age_cat)
 row.names(Metadata_Age_cat)= metadata_BCH$label
 Metadata_Age_cat$metadata_BCH.Age_cat =  factor(Metadata_Age_cat$metadata_BCH.Age_cat, levels = c("EOD", "LOD", "VLOD", "Older Children", "Adults"))
 colnames(Metadata_Age_cat)= c("3")
+colors_Age <- c( "#125A56", "#52B2D9", "#FFEE99", "#FD9A44", "#A01813")
+names(colors_Age) <- levels(Metadata_Age_cat[,1])
 
 # Clinical Outcomes
 # ICU
@@ -115,7 +120,7 @@ colnames(Metadata_Other_Vir) <- LETTERS[(ncol(Metadata_ALP_Fam)+ncol(Metadata_Pi
 p0 <- plot_GBS_CC_legend + new_scale_fill()
 p1 <- gheatmap(p0, Metadata_serotype,  width=0.05, offset=0.0002,
                font.size = 3, colnames_offset_y = -5, color="white") +
-  scale_fill_manual(values = color("vibrant")(6))+ 
+  scale_fill_manual(values =  c("#EE7733", "#0077BB", "#33BBEE", "#762A83", "#CC3311", "#009988"))+ 
   theme(legend.position="none")
 
 
@@ -123,7 +128,7 @@ p1 <- gheatmap(p0, Metadata_serotype,  width=0.05, offset=0.0002,
 p0x <- plot_GBS_CC+ new_scale_fill()
 p1x <- gheatmap(p0x, Metadata_serotype,  width=0.05,
                 font.size = 3, colnames_offset_y = -5, color="white") +
-  scale_fill_manual(values = color("vibrant")(6), name="1: Serotype") 
+  scale_fill_manual(values =  c("#EE7733", "#0077BB", "#33BBEE", "#762A83", "#CC3311", "#009988"), name="1: Serotype") 
 
 
 # add dates to the phylogenic tree as continuous heatmap
@@ -144,7 +149,7 @@ p3x <- gheatmap(p2x,  Metadata_date,  width=0.05,
 p4 <- p3 + new_scale_fill()
 p5 <- gheatmap(p4, Metadata_Age_cat,  width=0.05, offset=0.0014, 
                font.size = 3, colnames_offset_y = -5, color="white")+
-  scale_fill_manual(values = c("#A01813", "#125A56", "#52B2D9", "#FD9A44", "#AAD1EE")) +
+  scale_fill_manual(values = colors_Age) +
   theme(legend.position="none")+ 
   ggtree::vexpand(.03, -1)
 
@@ -152,8 +157,9 @@ p5 <- gheatmap(p4, Metadata_Age_cat,  width=0.05, offset=0.0014,
 p4x <- plot_GBS_CC+ new_scale_fill()
 p5x <- gheatmap(p4x, Metadata_Age_cat,  width=0.05, 
                 font.size = 3, colnames_offset_y = -5, color="white")+
-  scale_fill_manual(values =  c("#A01813", "#125A56", "#52B2D9", "#FD9A44", "#AAD1EE"), 
-                    name="3: Age group")
+  scale_fill_manual(values =  colors_Age, 
+                    name="3: Age group",
+                    breaks = c("EOD", "LOD", "VLOD", "Older Children", "Adults"))
 
 # add source to the phylogenic tree as heatmap
 p6 <- p5 + new_scale_fill()
@@ -242,28 +248,28 @@ p9x_leg   <- get_legend(p9x)
 
 # plot object with legends
 leg_grid0 = plot_grid(NULL,pgp_leg, NULL, ncol = 1, rel_heights= c(-0.35, 1, 0.5))
-leg_grid1 = plot_grid(NULL,p1x_leg, NULL, ncol = 1, rel_heights= c(-0.37, 1, 0.5))
-leg_grid2 = plot_grid(NULL,p3x_leg, NULL, ncol = 1, rel_heights= c(-0.15, 1, 2.5))
-leg_grid3 = plot_grid(NULL,p5x_leg, NULL, ncol = 1, rel_heights= c(-0.13, 1, 2.5))
+leg_grid1 = plot_grid(NULL,p1x_leg, NULL, ncol = 1, rel_heights= c(-0.35, 1, 0.5))
+leg_grid2 = plot_grid(NULL,p3x_leg, NULL, ncol = 1, rel_heights= c(-0.27, 1, 2.5))
+leg_grid3 = plot_grid(NULL,p5x_leg, NULL, ncol = 1, rel_heights= c(-0.22, 1, 2.5))
 leg_grid4 = plot_grid(NULL,p7x_leg, NULL, ncol = 1, rel_heights= c(-0.13, 1, 2.5))
 leg_grid5 = plot_grid(NULL,p9x_leg, NULL, ncol = 1, rel_heights= c(-0.13, 1, 2.5))
 
 # Add legends 1-5 to phylogeny
-legend_grid1_BCH <- plot_grid(leg_grid0, NULL,
-          leg_grid1,  NULL,
-          leg_grid2,NULL,
-          ncol = 6,  
-          rel_widths = c(0.1, 0.01, 0.05, 0.01, 0.15, 0.01))
 
-legend_grid2_BCH <- plot_grid(leg_grid3,NULL,
-                          leg_grid4,NULL,
-                          leg_grid5, NULL,
-                          ncol = 6,  
-                          rel_widths = c(0.15, 0.01, 0.05, 0.01, 0.15, 0.01))
+legend_grid1_BCH <- plot_grid(NULL, p7x_leg, NULL, p9x_leg, NULL,
+          ncol=1,
+          rel_heights = c(0.6,0.5, 0.1,0.5,0.8),
+          axis = "l" )
 
-legend_grid_BCH <-  plot_grid(NULL, legend_grid1_BCH, NULL, legend_grid2_BCH, NULL,
-                           ncol=1,
-                           rel_heights = c(0.3,0.5, -0.01,0.5,0.8))
+legend_grid_BCH <- plot_grid(pgp_leg, NULL,
+                            p1x_leg,  NULL,
+                            p3x_leg,NULL,
+                            legend_grid1_BCH,NULL,
+                            p5x_leg,NULL,
+          ncol = 10,
+          align = "h",
+          axis = "t" )
+legend_grid_BCH
 
 grod_plot_new_BCH = plot_grid(p15, NULL, legend_grid_BCH,
           ncol = 3,  
@@ -402,7 +408,7 @@ colnames(Metadata_Location)= c("6")
 p0 <- plot_tree + new_scale_fill()
 p1 <- gheatmap(p0, Metadata_serotype,  width=0.1, offset=0.0002,
                font.size = 3, colnames_offset_y = -35, color=NA) +
-  scale_fill_manual(values = c(color("vibrant")(7), color("medium contrast")(4)))+ 
+  scale_fill_manual(values = c( c("#EE7733", "#0077BB", "#33BBEE", "#762A83", "#CC3311", "#009988"), color("medium contrast")(4)))+ 
   theme(legend.position="none")
 
 
@@ -410,7 +416,7 @@ p1 <- gheatmap(p0, Metadata_serotype,  width=0.1, offset=0.0002,
 p0x <- plot_tree_noLeg+ new_scale_fill()
 p1x <- gheatmap(p0x, Metadata_serotype,  width=0.05,
                 font.size = 3, colnames_offset_y = -35, color="white") +
-  scale_fill_manual(values =c(color("vibrant")(7), color("medium contrast")(4)), name="1: Serotype") 
+  scale_fill_manual(values =c( c("#EE7733", "#0077BB", "#33BBEE", "#762A83", "#CC3311", "#009988"), color("medium contrast")(4)), name="1: Serotype") 
 
 
 # add dates to the phylogenic tree as continuous heatmap
@@ -473,6 +479,39 @@ legend_plots_join <- plot_grid(legend_grid_BCH, NULL, plot_grid2,
           ncol = 3,  
           rel_widths = c(0.5, -0.1, 0.2))
 
-plot_grid(plots_join, NULL, legend_plots_join,
+plot_grid(plots_join, NULL, legend_grid_BCH,
           ncol = 1,  
-          rel_heights = c(0.5, -0.01, 0.2))
+          rel_heights = c(0.5, 0.1, 0.2))
+
+
+
+
+# plot object with legends
+leg_grid0 = plot_grid(NULL,pgp_leg, NULL, ncol = 1, rel_heights= c(-0.1, 1, 0.5))
+leg_grid1 = plot_grid(NULL,p1x_leg, NULL, ncol = 1, rel_heights= c(-0.5, 1, 0.5))
+leg_grid2 = plot_grid(NULL,p3x_leg, NULL, ncol = 1, rel_heights= c(-0.8, 1, 2.5))
+leg_grid3 = plot_grid(NULL,p5x_leg, NULL, ncol = 1, rel_heights= c(-0.7, 1, 2.5))
+leg_grid4 = plot_grid(NULL,p7x_leg, NULL, ncol = 1, rel_heights= c(-0.13, 1, 2.5))
+leg_grid5 = plot_grid(NULL,p9x_leg, NULL, ncol = 1, rel_heights= c(-0.13, 1, 2.5))
+
+# Add legends 1-5 to phylogeny
+legend_grid1_BCH <- plot_grid(NULL, p7x_leg, NULL, p9x_leg, NULL,
+                              ncol=1,
+                              rel_heights = c(-0.8,0.5, 0.8,0.5,0.8),
+                              axis = "l" )
+
+legend_grid_BCH <- plot_grid(NULL, leg_grid0, NULL,
+                             leg_grid1,  NULL,
+                             leg_grid3,NULL,
+                             legend_grid1_BCH,NULL,
+                             leg_grid2,NULL,
+                             ncol = 10,
+                             align = "h",
+                             axis = "t" )
+
+plot_grid(plots_join, NULL, legend_grid_BCH,NULL,
+          ncol = 1,  
+          rel_heights = c(0.5, 0.05, 0.2, -0.01))
+
+
+

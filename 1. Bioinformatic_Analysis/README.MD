@@ -127,7 +127,15 @@ do
  nextflow run main.nf --reads $base\_trimmed_{1,2}.fq.gz --results_dir $base\_sero_res_results --run_surfacetyper false --run_mlst false
 done
 ```
-# 4.3. Join results
+## 4.3. Run only pbp2X
+```
+for i in data/*_R1_001.fastq.gz
+do
+base=$(echo $i | cut -d '/' -f2-2 | cut -d '_' -f1-1)
+ nextflow run main.nf --reads $base\_S$base\_L001_R{1,2}_001.fastq.gz --results_dir S$base\_pbp2x_results --run_pbptyper true --run_sero_res false --run_surfacetyper false --run_mlst false --contigs data/S$base\.fasta
+done
+```
+# 4.4. Join results
 ```
 # SURFACE PROTEINS
 awk 'FNR==1 && NR!=1 {next} {print}' *_surfacetyper_results/surface_protein_incidence.txt> BCH_GBS_surface_protein.txt
@@ -173,7 +181,7 @@ cd 5.ASSEMBLY/
 for i in ../1.TRIMMED_READS/*_trimmed_1.fq.gz
 do
   base=$(echo $i | cut -d '/' -f3-3 | cut -d '_' -f1-1)
- sbatch -p shared -c 1 -t 0-02:00 --mem=10000 --wrap="unicycler -1 ../1.TRIMMED_READS/$base\_trimmed_1.fq.gz  -2 ../1.TRIMMED_READS/$base\_trimmed_2.fq.gz -o $base\.unicycler.out
+ sbatch -p shared -c 1 -t 0-05:00 --mem=10000 --wrap="unicycler -1 ../1.TRIMMED_READS/$base\_trimmed_1.fq.gz  -2 ../1.TRIMMED_READS/$base\_trimmed_2.fq.gz -o $base\.unicycler.out
  mv $base\.unicycler.out/assembly.fasta $base\.fasta"
 done
 cd ../

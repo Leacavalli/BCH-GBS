@@ -115,7 +115,7 @@ tree_CC_noMeningitis <- full_join(tree_GBS_BCH_Final_noMeningitis, Metadata_CC, 
 # ----------------------------------------- #
 # ---- REDEFINE MAKE_PLOT WITH ORDER  ----- #
 # ----------------------------------------- #
-colors_Age <- c("#A01813", "#125A56", "#52B2D9", "#FD9A44", "#AAD1EE")
+colors_Age <- c( "#125A56", "#52B2D9", "#FFEE99", "#FD9A44", "#A01813")
 names(colors_Age) <- levels(Metadata_Age_cat[,1])
 
 
@@ -134,13 +134,17 @@ Make_plot <- function(tree, tip_order = NULL) {
   p0 <- p + new_scale_fill()
   p1 <- gheatmap(p0, Metadata_serotype, width = 0.05, offset = 0.0002,
                  font.size = 3, colnames_offset_y = -1, color = "white") +
-    scale_fill_manual(name = "1. Serotype",values = color("vibrant")(6)) +
+    scale_fill_manual(name = "1. Serotype",values =  c("#EE7733", "#0077BB", "#33BBEE", "#762A83", "#CC3311", "#009988")) +
     theme(legend.position = "none")
   
   p4 <- p1 + new_scale_fill()
   p5 <- gheatmap(p4, Metadata_Age_cat, width = 0.05, offset = 0.0014,
-                 font.size = 3, colnames_offset_y = -1, color = "white") +
-    scale_fill_manual(name = "2. Age of Onset",values = colors_Age) +
+                 font.size = 3, colnames_offset_y = -1, color = "white")+
+    scale_fill_manual(
+      name = "2. Age of Onset",
+      values = colors_Age,
+      breaks = c("EOD", "LOD", "VLOD", "Older Children", "Adults") # force order if needed
+    ) +
     ggtree::vexpand(.03, -1)
   
   return(p5)

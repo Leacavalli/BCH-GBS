@@ -15,6 +15,7 @@ library(khroma)
 library(colorBlindness)
 library(ggplot2)
 library(cowplot)
+library(gridExtra)
 
 # load data
 setwd("~/GitHub/BCH-GBS/2.Statistical_Analysis/Data")
@@ -59,13 +60,13 @@ Sero_df_infant <- data_clean |>
 
 # Age distribution of Serotypes
 Age_Sero_df <- data_clean |>
-  mutate(Age_cat = factor(Age_cat, levels = c("EOD", "LOD", "VLOD","Older Children (1-18 years)", "Adults"))) |>
+  mutate(Age_cat = factor(Age_cat, levels = c("EOD", "LOD", "VLOD","Older Children", "Adults"))) |>
   group_by(Serotype, Age_cat) |>
   summarise(N = n(), .groups = "drop") |>
   pivot_wider(names_from = Age_cat, values_from = N) |>
-  dplyr::select(Serotype, "EOD", "LOD", "VLOD","Older Children (1-18 years)", "Adults")|>
-  replace_na(list("EOD" = 0, "LOD" = 0, "VLOD" = 0, "Older Children (1-18 years)" = 0, "Adults" = 0))|>
-  mutate(across(c("EOD", "LOD", "VLOD","Older Children (1-18 years)", "Adults"), ~ paste(., " (", round(. / sum(.) * 100), "%)", sep="")))
+  dplyr::select(Serotype, "EOD", "LOD", "VLOD","Older Children", "Adults")|>
+  replace_na(list("EOD" = 0, "LOD" = 0, "VLOD" = 0, "Older Children" = 0, "Adults" = 0))|>
+  mutate(across(c("EOD", "LOD", "VLOD","Older Children", "Adults"), ~ paste(., " (", round(. / sum(.) * 100), "%)", sep="")))
   
 # Join everything
 Age_Sero_df_FINAL <- left_join(left_join(Age_Sero_df, Sero_df_infant), Sero_df) 
@@ -86,13 +87,13 @@ CC_df_infant <- data_clean |>
 
 # Age distribution of CCs
 Age_CC_df <- data_clean |>
-  mutate(Age_cat = factor(Age_cat, levels = c("EOD", "LOD", "VLOD","Older Children (1-18 years)", "Adults"))) |>
+  mutate(Age_cat = factor(Age_cat, levels = c("EOD", "LOD", "VLOD","Older Children", "Adults"))) |>
   group_by(CC, Age_cat) |>
   summarise(N = n(), .groups = "drop") |>
   pivot_wider(names_from = Age_cat, values_from = N) |>
-  dplyr::select(CC, "EOD", "LOD", "VLOD","Older Children (1-18 years)", "Adults")|>
-  replace_na(list("EOD" = 0, "LOD" = 0, "VLOD" = 0, "Older Children (1-18 years)" = 0, "Adults" = 0))|>
-  mutate(across(c("EOD", "LOD", "VLOD","Older Children (1-18 years)", "Adults"), ~ paste(., " (", round(. / sum(.) * 100), "%)", sep="")))
+  dplyr::select(CC, "EOD", "LOD", "VLOD","Older Children", "Adults")|>
+  replace_na(list("EOD" = 0, "LOD" = 0, "VLOD" = 0, "Older Children" = 0, "Adults" = 0))|>
+  mutate(across(c("EOD", "LOD", "VLOD","Older Children", "Adults"), ~ paste(., " (", round(. / sum(.) * 100), "%)", sep="")))
 
 # Join everything
 Age_CC_df_FINAL <- left_join(left_join(Age_CC_df, CC_df_infant), CC_df) 
@@ -108,13 +109,13 @@ Age_Sero_CC_df
 ```{r}
 # Age distribution of CC
 N_Age <- data_clean  |>
-  mutate(Age_cat = ifelse(grepl("Older", Age_cat), "Older Children", Age_cat))|>  
+  mutate(Age_cat = ifelse(grepl("Older", Age_cat), "Older\nChildren", Age_cat))|>  
   group_by(Age_cat) |>
   summarise(N = n())
 df_CC_AGE <- data_clean |>  
   mutate(CC = factor(CC, levels = rev(c(17,23, 12,19, 459, 1)))) |>
-  mutate(Age_cat = ifelse(grepl("Older", Age_cat), "Older Children", Age_cat)) |>
-  mutate(Age_cat = factor(Age_cat, levels = c("EOD", "LOD", "VLOD", "Older Children", "Adults"))) |>
+  mutate(Age_cat = ifelse(grepl("Older", Age_cat), "Older\nChildren", Age_cat)) |>
+  mutate(Age_cat = factor(Age_cat, levels = c("EOD", "LOD", "VLOD", "Older\nChildren", "Adults"))) |>
   group_by(CC, Age_cat) |>
   summarise(Count = n(), .groups = 'drop') |>
   group_by(Age_cat) |>  # Ensure proportions are calculated per age group
@@ -141,8 +142,8 @@ p1 <- ggplot() +
 
 # Age distribution of Serotypes
 df_Serotype_AGE <- data_clean |>  
-  mutate(Age_cat = ifelse(grepl("Older", Age_cat), "Older Children", Age_cat))|> 
-  mutate(Age_cat = factor(Age_cat, levels= c("EOD", "LOD", "VLOD", "Older Children", "Adults")))|>
+  mutate(Age_cat = ifelse(grepl("Older", Age_cat), "Older\nChildren", Age_cat))|> 
+  mutate(Age_cat = factor(Age_cat, levels= c("EOD", "LOD", "VLOD", "Older\nChildren", "Adults")))|>
   group_by(Serotype, Age_cat) |>
   summarise(Count = n(), .groups = 'drop') |>
   group_by(Age_cat) |>  # Ensure proportions are calculated per age group
@@ -159,7 +160,7 @@ p2 <- ggplot() +
   xlab("Age group") +
   ylab("Proportion") +
   labs(fill = "Serotype") +
-  scale_fill_manual(values = color("vibrant")(7)) +
+  scale_fill_manual(values = c("#EE7733", "#0077BB", "#33BBEE", "#762A83", "#CC3311", "#009988")) +
   theme(axis.text.x = element_text(angle = 60, hjust = 1, size=15), 
         axis.text.y = element_text(size=15), 
         axis.title = element_text(size=15), 
@@ -199,14 +200,14 @@ p4 <- data_clean |>
   xlab("Year of Isolation") +
   ylab("Proportion") +
   labs(fill = "Serotype")+
-  scale_fill_manual(values = color("vibrant")(6))+
+  scale_fill_manual(values = c("#EE7733", "#0077BB", "#33BBEE", "#762A83", "#CC3311", "#009988"))+
   theme(axis.text.x = element_text(angle = 60, hjust = 1, size=15), 
         axis.text.y = element_text(size=15), 
         axis.title = element_text(size=15), 
         legend.text = element_text(size=15), 
         legend.title = element_text(size=15))
 
-grid.arrange(p1,  p3,p2, p4, nrow=2)
+grid.arrange(p1,p3,p2,p4, nrow=2)
 
 # Test for differences of CC across Age_cat
 fisher.test(data_clean$Age_cat, data_clean$CC, workspace = 2e8)
@@ -219,6 +220,10 @@ pairwiseNominalIndependence(CC_tab,
                                  method = "fdr")
 data_clean_LOD_VLOD <- data_clean |> filter(Age_cat %in% c("LOD", "VLOD"))
 fisher.test(data_clean_LOD_VLOD$Age_cat, data_clean_LOD_VLOD$CC, workspace = 2e8)
+
+
+data_clean_LOD_older <- data_clean |> filter(Age_cat %in% c("LOD", "Older Children"))
+fisher.test(data_clean_LOD_older$Age_cat, data_clean_LOD_older$CC, workspace = 2e8)
 
 # Test for differences of serotype across Age_cat
 fisher.test(data_clean$Age_cat, data_clean$Serotype, workspace = 2e8)
@@ -287,25 +292,25 @@ data_clean |>
 ```{r}
 # Age distribution of CCs
 CC_Age_df <- data_clean |>
-  mutate(Age_cat = factor(Age_cat, levels = c("EOD", "LOD", "VLOD","Older Children (1-18 years)", "Adults"))) |>
+  mutate(Age_cat = factor(Age_cat, levels = c("EOD", "LOD", "VLOD","Older Children", "Adults"))) |>
   group_by(CC, Age_cat) |>
   summarise(N = n(), .groups = "drop") |>
   pivot_wider(names_from = Age_cat, values_from = N) |>
-  dplyr::select(CC, "EOD", "LOD", "VLOD","Older Children (1-18 years)", "Adults")|>
-  replace_na(list("EOD" = 0, "LOD" = 0, "VLOD" = 0, "Older Children (1-18 years)" = 0, "Adults" = 0))|>
-  mutate(across(c("EOD", "LOD", "VLOD","Older Children (1-18 years)", "Adults"), ~ paste(., " (", round(. / sum(.) * 100), "%)", sep="")))|>
+  dplyr::select(CC, "EOD", "LOD", "VLOD","Older Children", "Adults")|>
+  replace_na(list("EOD" = 0, "LOD" = 0, "VLOD" = 0, "Older Children" = 0, "Adults" = 0))|>
+  mutate(across(c("EOD", "LOD", "VLOD","Older Children", "Adults"), ~ paste(., " (", round(. / sum(.) * 100), "%)", sep="")))|>
   mutate(ST = "Total", .before = "EOD")|>
   filter(!is.na(CC ))
 
 # Age distribution of STs
 ST_Age_df <- data_clean |>
-  mutate(Age_cat = factor(Age_cat, levels = c("EOD", "LOD", "VLOD","Older Children (1-18 years)", "Adults"))) |>
+  mutate(Age_cat = factor(Age_cat, levels = c("EOD", "LOD", "VLOD","Older Children", "Adults"))) |>
   group_by(CC, ST, Age_cat) |>
   summarise(N = n(), .groups = "drop") |>
   pivot_wider(names_from = Age_cat, values_from = N) |>
-  dplyr::select(CC, ST, "EOD", "LOD", "VLOD","Older Children (1-18 years)", "Adults")|>
-  replace_na(list("EOD" = 0, "LOD" = 0, "VLOD" = 0, "Older Children (1-18 years)" = 0, "Adults" = 0))|>
-  mutate(across(c("EOD", "LOD", "VLOD","Older Children (1-18 years)", "Adults"), ~ paste(., " (", round(. / sum(.) * 100), "%)", sep="")))|>
+  dplyr::select(CC, ST, "EOD", "LOD", "VLOD","Older Children", "Adults")|>
+  replace_na(list("EOD" = 0, "LOD" = 0, "VLOD" = 0, "Older Children" = 0, "Adults" = 0))|>
+  mutate(across(c("EOD", "LOD", "VLOD","Older Children", "Adults"), ~ paste(., " (", round(. / sum(.) * 100), "%)", sep="")))|>
   mutate(ST= paste0("ST",ST))
 # Join
 CC_ST_Age_df <- ST_Age_df
@@ -318,10 +323,10 @@ for(i in 1:nrow(CC_Age_df)){
 
 # Total columns
 CC_ST_Total_df <- CC_ST_Age_df |>
-  mutate(across(c("EOD", "LOD", "VLOD", "Older Children (1-18 years)", "Adults"),
+  mutate(across(c("EOD", "LOD", "VLOD", "Older Children", "Adults"),
                 ~ as.numeric(str_split(., "\\(", simplify = TRUE)[,1]))) |>  # Convert extracted values to numeric
   rowwise() |>  # Apply the sum row-wise
-  mutate(Total = sum(c_across(c("EOD", "LOD", "VLOD", "Older Children (1-18 years)", "Adults")), na.rm = TRUE)) |>  # Sum across the dplyr::selected columns
+  mutate(Total = sum(c_across(c("EOD", "LOD", "VLOD", "Older Children", "Adults")), na.rm = TRUE)) |>  # Sum across the dplyr::selected columns
   ungroup()|>
   dplyr::select(CC, ST, Total)
   
@@ -478,7 +483,7 @@ Surf_prot_per_CC_df_t
 # distribution of vaccine targets and surface proteins per Age group
 ```{r}
 Surf_prot_per_Age_cat_df <- data_clean |>
-  mutate(Age_cat = factor(Age_cat, levels = c("EOD", "LOD", "VLOD","Older Children (1-18 years)", "Adults"))) |>
+  mutate(Age_cat = factor(Age_cat, levels = c("EOD", "LOD", "VLOD","Older Children", "Adults"))) |>
   group_by(Age_cat)|> 
   mutate(Surface_protein.ALP_FAM = Surface_protein.ALPHA + Surface_protein.ALP1 + Surface_protein.ALP23 + Surface_protein.RIB,
          Surface_protein.PILUS_island = rowSums(across(contains("PI"))), 
